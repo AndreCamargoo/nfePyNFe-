@@ -36,6 +36,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+# Adicione esta configuração se quiser servir em um subcaminho (ex: /meuProjeto)
+#FORCE_SCRIPT_NAME = '/meuProjeto'
+#USE_X_FORWARDED_HOST = True
 
 # Application definition
 
