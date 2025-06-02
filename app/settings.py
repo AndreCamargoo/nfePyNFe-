@@ -32,7 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-a_h_jcaxpm1+pu&1kq31z9xp_i=s-39#t!crujpuozhm9@(i++'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['api.allnube.com.br', 'localhost', '127.0.0.1']
 
