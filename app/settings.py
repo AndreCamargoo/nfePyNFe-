@@ -102,13 +102,12 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Postgresql
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'allnube',
-        'USER': 'allnube',
-        'PASSWORD': 'PLeyyO%NHEp@qhFK',
-        'HOST': '177.153.20.14',
-        # 'PORT': '5433', # Windows localhost
-        'PORT': '5432',
+        'ENGINE': os.getenv('DB_CONNECTION'),
+        'NAME': os.getenv('DB_DATABASE'),
+        'USER': os.getenv('DB_USERNAME'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
     }
 }
 
