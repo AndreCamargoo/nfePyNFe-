@@ -92,10 +92,23 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
+# Postgresql
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'allnube',
+        'USER': 'allnube',
+        'PASSWORD': 'PLeyyO%NHEp@qhFK',
+        'HOST': '177.153.20.14',
+        # 'PORT': '5433', # Windows localhost
+        'PORT': '5432',
     }
 }
 
