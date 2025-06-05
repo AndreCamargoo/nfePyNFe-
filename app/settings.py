@@ -34,7 +34,7 @@ SECRET_KEY = 'django-insecure-a_h_jcaxpm1+pu&1kq31z9xp_i=s-39#t!crujpuozhm9@(i++
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['api.allnube.com.br', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*']
 
 # Adicione esta configuração se quiser servir em um subcaminho (ex: /meuProjeto)
 #FORCE_SCRIPT_NAME = '/meuProjeto'
@@ -152,6 +152,6 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
 }
