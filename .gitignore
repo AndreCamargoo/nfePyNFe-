@@ -1,0 +1,50 @@
+# Ignorar arquivos do Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__
+*.db
+*.sqlite3
+*.log
+
+# Pastas do Django
+/static/
+/media/
+
+# Ambiente virtual
+venv/
+env/
+*.env
+*.venv
+
+# Arquivos de configuração
+*.ini
+*.log
+
+# Arquivos de dependências
+*.egg
+*.egg-info
+dist/
+build/
+
+# Arquivos de IDEs
+.vscode/
+.idea/
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos do pytest
+*.cover
+*.hypothesis/
+
+# Arquivos do PyCharm
+.idea/
+
+# Configurações do Django
+*.sqlite3
+
+# Outras pastas locais que podem ser ignoradas
+*.bak
+*.swp
