@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 
 
@@ -38,6 +39,8 @@ STATUS_CHOICES = (
 
 
 class Empresa(models.Model):
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='empresas')
+    matriz_filial = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='filiais')
     razao_social = models.CharField(max_length=200)
     documento = models.CharField(max_length=18)
     ie = models.CharField(max_length=15)

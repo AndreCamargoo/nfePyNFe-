@@ -9,6 +9,7 @@ __pycache__
 
 # Pastas do Django
 /static/
+/staticfiles/
 /media/
 
 # Ambiente virtual

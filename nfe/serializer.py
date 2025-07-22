@@ -135,3 +135,41 @@ class PagamentoModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Pagamento
         fields = '__all__'
+
+
+class NfeFaturamentoOutputSerializer(serializers.Serializer):
+    total_geral = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_mes = serializers.DecimalField(max_digits=20, decimal_places=2)
+    media_mensal = serializers.DecimalField(max_digits=20, decimal_places=2)
+    maior_nota_mes = serializers.DecimalField(max_digits=20, decimal_places=2)
+    quantidade_notas_mes = serializers.IntegerField()
+    percentual_mes_sobre_media = serializers.DecimalField(max_digits=5, decimal_places=2)
+    quantidade_meses_calculo_media = serializers.IntegerField()
+
+
+class NfeFaturamentoMesOutputSerializer(serializers.Serializer):
+    janeiro = serializers.DecimalField(max_digits=20, decimal_places=2)
+    fevereiro = serializers.DecimalField(max_digits=20, decimal_places=2)
+    marco = serializers.DecimalField(max_digits=20, decimal_places=2)
+    abril = serializers.DecimalField(max_digits=20, decimal_places=2)
+    maio = serializers.DecimalField(max_digits=20, decimal_places=2)
+    junho = serializers.DecimalField(max_digits=20, decimal_places=2)
+    julho = serializers.DecimalField(max_digits=20, decimal_places=2)
+    agosto = serializers.DecimalField(max_digits=20, decimal_places=2)
+    setembro = serializers.DecimalField(max_digits=20, decimal_places=2)
+    outubro = serializers.DecimalField(max_digits=20, decimal_places=2)
+    novembro = serializers.DecimalField(max_digits=20, decimal_places=2)
+    dezembro = serializers.DecimalField(max_digits=20, decimal_places=2)
+    media = serializers.DecimalField(max_digits=20, decimal_places=2)
+
+
+class NfeProdutosOutputSerializer(serializers.Serializer):
+    cean = serializers.CharField()
+    cprod = serializers.CharField()
+    xprod = serializers.CharField()
+    total_vendido = serializers.DecimalField(max_digits=20, decimal_places=2)
+    qtd_total = serializers.IntegerField()
+    preco_medio = serializers.DecimalField(max_digits=20, decimal_places=2)
+    preco_min = serializers.DecimalField(max_digits=20, decimal_places=2)
+    preco_max = serializers.DecimalField(max_digits=20, decimal_places=2)
+    variacao_preco = serializers.DecimalField(max_digits=20, decimal_places=2)

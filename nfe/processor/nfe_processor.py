@@ -62,12 +62,16 @@ class NFeProcessor:
 
     def _criar_nota_fiscal(self):
         self.infNFe = self.root.find('.//nfe:infNFe', namespaces=self.ns)
+        ide_el = self.infNFe.find('.//nfe:ide', namespaces=self.ns)
+
+        dhEmi_text = ide_el.findtext('nfe:dhEmi', namespaces=self.ns)
+        dhSaiEnt_text = ide_el.findtext('nfe:dhSaiEnt', namespaces=self.ns)
 
         return NotaFiscal.objects.create(
             chave=self.infNFe.attrib.get('Id', '').replace('NFe', ''),
             versao=self.infNFe.attrib.get('versao', ''),
-            dhEmi=self.infNFe.findtext('nfe:dhEmi', namespaces=self.ns),
-            dhSaiEnt=self.infNFe.findtext('nfe:dhSaiEnt', namespaces=self.ns),
+            dhEmi=parser.isoparse(dhEmi_text) if dhEmi_text else None,
+            dhSaiEnt=parser.isoparse(dhSaiEnt_text) if dhSaiEnt_text else None,
             tpAmb=1,
             empresa=self.empresa,
             fileXml=self.fileXml
