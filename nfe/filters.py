@@ -34,9 +34,21 @@ class ProdutoFilter(django_filters.FilterSet):
 
 
 class FornecedorFilter(django_filters.FilterSet):
+    q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
     cnpj = django_filters.CharFilter(field_name='CNPJ', lookup_expr='icontains')
     xNome = django_filters.CharFilter(field_name='xNome', lookup_expr='icontains')
+    fone = django_filters.CharFilter(field_name='fone', lookup_expr='icontains')
 
     class Meta:
         model = Emitente
-        fields = ['CNPJ', 'xNome']
+        fields = ['CNPJ', 'xNome', 'fone']
+
+    def filter_by_q(self, queryset, name, value):
+        if value:
+            # Usando Q para aplicar OR entre as colunas
+            return queryset.filter(
+                Q(CNPJ__icontains=value) |
+                Q(xNome__icontains=value) |
+                Q(fone__icontains=value)
+            )
+        return queryset
