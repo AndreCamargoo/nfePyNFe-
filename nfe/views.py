@@ -137,7 +137,7 @@ class NfeFornecedorListAPIView(generics.ListAPIView):
 
         filtered_nfe = NotaFiscalFilter(self.request.GET, queryset=nfe).qs
 
-        fornecedores = models.Emitente.objects.filter(nota_fiscal__in=filtered_nfe)
+        fornecedores = models.Emitente.objects.filter(nota_fiscal__in=filtered_nfe).order_by('CNPJ').distinct('CNPJ')
 
         if fornecedores.exists():
             return fornecedores
