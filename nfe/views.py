@@ -1,10 +1,13 @@
+import os
 import re
 from django_filters.rest_framework import DjangoFilterBackend
+from django.shortcuts import get_object_or_404
+from django.db import connection
+from django.core.files import File
+
 from rest_framework import generics, status, response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
-from django.db import connection
 
 from empresa.models import Empresa
 from .filters import (
@@ -21,6 +24,7 @@ from nfe.serializer import (
 from nfe.processor.nfe_processor import NFeProcessor
 
 from datetime import datetime
+from brazilfiscalreport.danfe import Danfe
 
 
 class NfeListCreateAPIView(generics.ListCreateAPIView):
@@ -96,6 +100,7 @@ class NfeProdutosListAPIView(generics.ListAPIView):
     serializer_class = ProdutoModelSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = ProdutoFilter
+    pagination_class = utils.CustomPageSizePagination
 
     def get_queryset(self):
         user = self.request.user
@@ -116,10 +121,22 @@ class NfeProdutosListAPIView(generics.ListAPIView):
             # Retorna os produtos encontrados
             return produtos
 
-        return response.Response(
-            {'message': 'Nenhum produto encontrado'},
-            status=status.HTTP_204_NO_CONTENT
-        )
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        if not queryset.exists():
+            return response.Response(
+                {'message': 'Nenhum produto encontrado'},
+                status=status.HTTP_204_NO_CONTENT
+            )
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return response.Response(serializer.data)
 
 
 class NfeFornecedorListAPIView(generics.ListAPIView):
@@ -141,6 +158,12 @@ class NfeFornecedorListAPIView(generics.ListAPIView):
 
         if fornecedores.exists():
             return fornecedores
+
+
+class NfeFornecedorDetailListAPIView(generics.RetrieveAPIView):
+    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    queryset = models.Emitente.objects.all()
+    serializer_class = EmitenteModelSerializer
 
 
 class NfeFaturamentoAPIView(APIView):
@@ -207,13 +230,15 @@ class NfeProdutosAPIView(APIView):
         # Empresa associada ao usuário
         empresa_id = request.user.id  # ajusta conforme seu modelo
 
-        order = str(request.query_params.get("order", ''))
-        limit = int(request.query_params.get("limit", 10))
+        order = str(request.query_params.get("order", ""))
+        limit = request.query_params.get("limit")
+        search = request.query_params.get("q", "")
+        offset = request.query_params.get("offset")
 
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT * FROM analisar_produtos_empresa(%s, %s, %s)",
-                [empresa_id, order, limit]
+                "SELECT * FROM analisar_produtos_empresa(%s, %s, %s, %s, %s)",
+                [empresa_id, order, limit, search, offset]
             )
             columns = [col[0] for col in cursor.description]
             rows = cursor.fetchall()  # Usando fetchall para pegar todas as linhas
@@ -228,3 +253,59 @@ class NfeProdutosAPIView(APIView):
         serializer = NfeProdutosOutputSerializer(data_list, many=True)
 
         return response.Response(serializer.data)
+
+
+class GerarDanfeAPIView(generics.RetrieveAPIView):
+    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    queryset = models.NotaFiscal.objects.all()
+
+    @staticmethod
+    def _gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe'):
+        if not os.path.exists(pasta_saida):
+            os.makedirs(pasta_saida)
+
+        with open(xml_file_path, "r", encoding="utf8") as file:
+            xml_content = file.read()
+
+        nome_base = os.path.splitext(os.path.basename(xml_file_path))[0]
+        caminho_pdf = os.path.join(pasta_saida, f'{nome_base}.pdf')
+
+        danfe = Danfe(xml=xml_content)
+        danfe.output(caminho_pdf)
+
+        return caminho_pdf
+
+    def get(self, request, *args, **kwargs):
+        nota_fiscal = self.get_object()
+
+        if not nota_fiscal.fileXml:
+            return response.Response(
+                {'error': 'Arquivo XML não encontrado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ✅ Se já existir filePdf e o arquivo estiver no disco, retorna direto
+        if nota_fiscal.filePdf and os.path.exists(nota_fiscal.filePdf.path):
+            return response.Response({
+                'message': 'DANFE já gerado anteriormente.',
+                'pdf_path': request.build_absolute_uri(nota_fiscal.filePdf.url)
+            }, status=status.HTTP_200_OK)
+
+        try:
+            xml_file_path = nota_fiscal.fileXml.path
+
+            # Gera novo PDF da DANFE
+            pdf_path = self._gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe')
+
+            # Abre o PDF e salva no campo filePdf
+            with open(pdf_path, 'rb') as pdf_file:
+                pdf_name = os.path.basename(pdf_path)
+                nota_fiscal.filePdf.save(pdf_name, File(pdf_file), save=True)
+
+            return response.Response({
+                'message': 'DANFE gerado com sucesso!',
+                'pdf_path': request.build_absolute_uri(nota_fiscal.filePdf.url)
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return response.Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

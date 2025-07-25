@@ -1,5 +1,13 @@
+from rest_framework.pagination import PageNumberPagination
+
 from django.shortcuts import get_object_or_404
 from .models import Empresa
+
+
+class CustomPageSizePagination(PageNumberPagination):
+    page_size = 10  # valor padrão (equivale ao settings.py)
+    page_size_query_param = 'pageSize'
+    max_page_size = 100  # limite para evitar abuso
 
 
 def get_empresas_filtradas(user, documento):

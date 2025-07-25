@@ -173,3 +173,4 @@ class NfeProdutosOutputSerializer(serializers.Serializer):
     preco_min = serializers.DecimalField(max_digits=20, decimal_places=2)
     preco_max = serializers.DecimalField(max_digits=20, decimal_places=2)
     variacao_preco = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_linhas = serializers.IntegerField()
