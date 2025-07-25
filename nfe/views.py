@@ -1,9 +1,10 @@
 import os
 import re
+from pathlib import Path
+
 from django_filters.rest_framework import DjangoFilterBackend
-from django.shortcuts import get_object_or_404
 from django.db import connection
-from django.core.files import File
+from django.conf import settings
 
 from rest_framework import generics, status, response
 from rest_framework.permissions import IsAuthenticated
@@ -261,6 +262,7 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
 
     @staticmethod
     def _gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe'):
+        """Gera e salva o PDF da DANFE a partir do XML."""
         if not os.path.exists(pasta_saida):
             os.makedirs(pasta_saida)
 
@@ -284,7 +286,7 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Se já existir filePdf e o arquivo estiver no disco, retorna direto
+        # Verifica se o DANFE já foi gerado e o arquivo ainda existe
         if nota_fiscal.filePdf and os.path.exists(nota_fiscal.filePdf.path):
             return response.Response({
                 'message': 'DANFE já gerado anteriormente.',
@@ -294,13 +296,17 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
         try:
             xml_file_path = nota_fiscal.fileXml.path
 
-            # Gera novo PDF da DANFE
+            # Gera o PDF
             pdf_path = self._gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe')
 
-            # Abre o PDF e salva no campo filePdf
-            with open(pdf_path, 'rb') as pdf_file:
-                pdf_name = os.path.basename(pdf_path)
-                nota_fiscal.filePdf.save(pdf_name, File(pdf_file), save=True)
+            # Garante que ambos são caminhos absolutos
+            pdf_path_absolute = Path(os.path.abspath(pdf_path))
+            media_root_path = Path(settings.MEDIA_ROOT).resolve()
+
+            # Calcula o caminho relativo a MEDIA_ROOT
+            relative_path = pdf_path_absolute.relative_to(media_root_path)
+            nota_fiscal.filePdf.name = str(relative_path)
+            nota_fiscal.save()
 
             return response.Response({
                 'message': 'DANFE gerado com sucesso!',
