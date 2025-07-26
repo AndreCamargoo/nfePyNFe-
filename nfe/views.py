@@ -286,25 +286,27 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Verifica se o DANFE já foi gerado e o arquivo ainda existe
-        if nota_fiscal.filePdf and os.path.exists(nota_fiscal.filePdf.path):
-            return response.Response({
-                'message': 'DANFE já gerado anteriormente.',
-                'pdf_path': request.build_absolute_uri(nota_fiscal.filePdf.url)
-            }, status=status.HTTP_200_OK)
-
         try:
-            xml_file_path = os.path.normpath(nota_fiscal.fileXml.path)
+            # Corrige possíveis barras invertidas salvas incorretamente no caminho
+            xml_file_name = nota_fiscal.fileXml.name.replace('\\', '/')
+            xml_file_path = os.path.join(settings.MEDIA_ROOT, xml_file_name)
+
+            # Verifica se já existe PDF gerado e válido
+            if nota_fiscal.filePdf and nota_fiscal.filePdf.path and os.path.exists(nota_fiscal.filePdf.path):
+                return response.Response({
+                    'message': 'DANFE já gerado anteriormente.',
+                    'pdf_path': request.build_absolute_uri(nota_fiscal.filePdf.url)
+                }, status=status.HTTP_200_OK)
 
             # Gera o PDF
             pdf_path = self._gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe')
 
-            # Garante que ambos são caminhos absolutos
+            # Resolve os caminhos para salvar no FileField
             pdf_path_absolute = Path(os.path.abspath(pdf_path))
             media_root_path = Path(settings.MEDIA_ROOT).resolve()
-
-            # Calcula o caminho relativo a MEDIA_ROOT
             relative_path = pdf_path_absolute.relative_to(media_root_path)
+
+            # Salva o novo caminho do PDF no objeto
             nota_fiscal.filePdf.name = str(relative_path)
             nota_fiscal.save()
 
@@ -313,5 +315,14 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
                 'pdf_path': request.build_absolute_uri(nota_fiscal.filePdf.url)
             }, status=status.HTTP_200_OK)
 
+        except FileNotFoundError as fnf:
+            return response.Response(
+                {'error': f'Arquivo XML não encontrado no caminho: {xml_file_path}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         except Exception as e:
-            return response.Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return response.Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
