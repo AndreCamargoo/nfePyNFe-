@@ -47,6 +47,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",           # Para dev local
     "http://allnube.com.br",           # Produção sem HTTPS (por enquanto)
     "http://app.allnube.com.br",       # Se for usar subdomínio para frontend
+    "http://177.153.20.14",            # IP direto (se necessário)
 ]
 
 # Adicione esta configuração se quiser servir em um subcaminho (ex: /meuProjeto)
