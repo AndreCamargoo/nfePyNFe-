@@ -294,7 +294,7 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
             }, status=status.HTTP_200_OK)
 
         try:
-            xml_file_path = nota_fiscal.fileXml.path
+            xml_file_path = os.path.normpath(nota_fiscal.fileXml.path)
 
             # Gera o PDF
             pdf_path = self._gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe')
