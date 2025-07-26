@@ -34,8 +34,20 @@ SECRET_KEY = 'django-insecure-a_h_jcaxpm1+pu&1kq31z9xp_i=s-39#t!crujpuozhm9@(i++
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*', "http://localhost:3000", "http://177.153.20.14/"]
-CORS_ALLOW_ALL_ORIGINS = True  # Liberar tudo temporariamente (não recomendado para produção)
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '177.153.20.14',
+    'api.allnube.com.br',
+    'allnube.com.br',
+]
+CORS_ALLOW_ALL_ORIGINS = False
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",           # Para dev local
+    "http://allnube.com.br",           # Produção sem HTTPS (por enquanto)
+    "http://app.allnube.com.br",       # Se for usar subdomínio para frontend
+]
 
 # Adicione esta configuração se quiser servir em um subcaminho (ex: /meuProjeto)
 # FORCE_SCRIPT_NAME = '/meuProjeto'
