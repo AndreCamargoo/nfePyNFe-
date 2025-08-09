@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import response
 from app.permissions import GlobalDefaultPermission
 
-from serializers import CustoMedioFornecedorSerializer
+from apexcharts.serializers import CustoMedioFornecedorSerializer
 
 from datetime import datetime
 
