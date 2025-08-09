@@ -1,7 +1,6 @@
 import xml.etree.ElementTree as ET
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
-from dateutil.parser import isoparse
 
 from empresa.models import HistoricoNSU
 from nfe.models import (
@@ -63,21 +62,12 @@ class NFeProcessor:
 
     def _criar_nota_fiscal(self):
         self.infNFe = self.root.find('.//nfe:infNFe', namespaces=self.ns)
-        if self.infNFe is None:
-            raise ValueError("Elemento <infNFe> não encontrado no XML")
-
-        ide_el = self.infNFe.find('.//nfe:ide', namespaces=self.ns)
-        if ide_el is None:
-            raise ValueError("Elemento <ide> não encontrado no XML")
-
-        dhEmi_text = ide_el.findtext('nfe:dhEmi', namespaces=self.ns)
-        dhSaiEnt_text = ide_el.findtext('nfe:dhSaiEnt', namespaces=self.ns)
 
         return NotaFiscal.objects.create(
             chave=self.infNFe.attrib.get('Id', '').replace('NFe', ''),
             versao=self.infNFe.attrib.get('versao', ''),
-            dhEmi=isoparse(dhEmi_text) if dhEmi_text else None,
-            dhSaiEnt=isoparse(dhSaiEnt_text) if dhSaiEnt_text else None,
+            dhEmi=self.infNFe.findtext('nfe:dhEmi', namespaces=self.ns),
+            dhSaiEnt=self.infNFe.findtext('nfe:dhSaiEnt', namespaces=self.ns),
             tpAmb=1,
             empresa=self.empresa,
             fileXml=self.fileXml
@@ -111,12 +101,8 @@ class NFeProcessor:
 
     def _criar_emitente(self, nota_fiscal):
         emit_el = self.infNFe.find('nfe:emit', namespaces=self.ns)
-        if emit_el is None:
-            raise ValueError("Elemento <emit> não encontrado no XML")
-
         enderEmit_el = emit_el.find('nfe:enderEmit', namespaces=self.ns)
         crt_el = emit_el.find('nfe:CRT', namespaces=self.ns)
-
         return Emitente.objects.create(
             nota_fiscal=nota_fiscal,
             CNPJ=emit_el.findtext('nfe:CNPJ', namespaces=self.ns),
@@ -124,23 +110,20 @@ class NFeProcessor:
             xFant=emit_el.findtext('nfe:xFant', namespaces=self.ns),
             IE=emit_el.findtext('nfe:IE', namespaces=self.ns),
             CRT=self._safe_int(crt_el.text) if crt_el is not None else 0,
-            xLgr=enderEmit_el.findtext('nfe:xLgr', namespaces=self.ns) if enderEmit_el is not None else '',
-            nro=enderEmit_el.findtext('nfe:nro', namespaces=self.ns) if enderEmit_el is not None else '',
-            xBairro=enderEmit_el.findtext('nfe:xBairro', namespaces=self.ns) if enderEmit_el is not None else '',
-            cMun=enderEmit_el.findtext('nfe:cMun', namespaces=self.ns) if enderEmit_el is not None else '',
-            xMun=enderEmit_el.findtext('nfe:xMun', namespaces=self.ns) if enderEmit_el is not None else '',
-            UF=enderEmit_el.findtext('nfe:UF', namespaces=self.ns) if enderEmit_el is not None else '',
-            CEP=enderEmit_el.findtext('nfe:CEP', namespaces=self.ns) if enderEmit_el is not None else '',
-            cPais=enderEmit_el.findtext('nfe:cPais', namespaces=self.ns) if enderEmit_el is not None else '',
-            xPais=enderEmit_el.findtext('nfe:xPais', namespaces=self.ns) if enderEmit_el is not None else '',
-            fone=enderEmit_el.findtext('nfe:fone', namespaces=self.ns) if enderEmit_el is not None else '',
+            xLgr=enderEmit_el.findtext('nfe:xLgr', namespaces=self.ns),
+            nro=enderEmit_el.findtext('nfe:nro', namespaces=self.ns),
+            xBairro=enderEmit_el.findtext('nfe:xBairro', namespaces=self.ns),
+            cMun=enderEmit_el.findtext('nfe:cMun', namespaces=self.ns),
+            xMun=enderEmit_el.findtext('nfe:xMun', namespaces=self.ns),
+            UF=enderEmit_el.findtext('nfe:UF', namespaces=self.ns),
+            CEP=enderEmit_el.findtext('nfe:CEP', namespaces=self.ns),
+            cPais=enderEmit_el.findtext('nfe:cPais', namespaces=self.ns),
+            xPais=enderEmit_el.findtext('nfe:xPais', namespaces=self.ns),
+            fone=enderEmit_el.findtext('nfe:fone', namespaces=self.ns),
         )
 
     def _criar_destinatario(self, nota_fiscal):
         dest_el = self.infNFe.find('nfe:dest', namespaces=self.ns)
-        if dest_el is None:
-            raise ValueError("Elemento <dest> não encontrado no XML")
-
         enderDest_el = dest_el.find('nfe:enderDest', namespaces=self.ns)
 
         return Destinatario.objects.create(
@@ -149,16 +132,16 @@ class NFeProcessor:
             xNome=dest_el.findtext('nfe:xNome', namespaces=self.ns),
             IE=dest_el.findtext('nfe:IE', namespaces=self.ns),
             indIEDest=self._safe_int(dest_el.findtext('nfe:indIEDest', namespaces=self.ns)),
-            xLgr=enderDest_el.findtext('nfe:xLgr', namespaces=self.ns) if enderDest_el is not None else '',
-            nro=enderDest_el.findtext('nfe:nro', namespaces=self.ns) if enderDest_el is not None else '',
-            xCpl=enderDest_el.findtext('nfe:xCpl', namespaces=self.ns) if enderDest_el is not None else '',
-            xBairro=enderDest_el.findtext('nfe:xBairro', namespaces=self.ns) if enderDest_el is not None else '',
-            cMun=enderDest_el.findtext('nfe:cMun', namespaces=self.ns) if enderDest_el is not None else '',
-            xMun=enderDest_el.findtext('nfe:xMun', namespaces=self.ns) if enderDest_el is not None else '',
-            UF=enderDest_el.findtext('nfe:UF', namespaces=self.ns) if enderDest_el is not None else '',
-            CEP=enderDest_el.findtext('nfe:CEP', namespaces=self.ns) if enderDest_el is not None else '',
-            cPais=enderDest_el.findtext('nfe:cPais', namespaces=self.ns) if enderDest_el is not None else '',
-            xPais=enderDest_el.findtext('nfe:xPais', namespaces=self.ns) if enderDest_el is not None else '',
+            xLgr=enderDest_el.findtext('nfe:xLgr', namespaces=self.ns),
+            nro=enderDest_el.findtext('nfe:nro', namespaces=self.ns),
+            xCpl=enderDest_el.findtext('nfe:xCpl', namespaces=self.ns),
+            xBairro=enderDest_el.findtext('nfe:xBairro', namespaces=self.ns),
+            cMun=enderDest_el.findtext('nfe:cMun', namespaces=self.ns),
+            xMun=enderDest_el.findtext('nfe:xMun', namespaces=self.ns),
+            UF=enderDest_el.findtext('nfe:UF', namespaces=self.ns),
+            CEP=enderDest_el.findtext('nfe:CEP', namespaces=self.ns),
+            cPais=enderDest_el.findtext('nfe:cPais', namespaces=self.ns),
+            xPais=enderDest_el.findtext('nfe:xPais', namespaces=self.ns),
         )
 
     def _criar_produto_impostos(self, nota_fiscal):
