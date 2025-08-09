@@ -7,7 +7,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('authentication.urls')),
     path('api/v1/', include('nfe.urls')),
-    path('api/v1/', include('empresa.urls'))
+    path('api/v1/', include('empresa.urls')),
+    path('api/v1/', include('apexcharts.urls')),
 ]
 
 # + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

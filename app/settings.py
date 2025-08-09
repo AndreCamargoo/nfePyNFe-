@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     'authentication',
     'nfe',
     'empresa',
+    'apexcharts',
 ]
 
 MIDDLEWARE = [
