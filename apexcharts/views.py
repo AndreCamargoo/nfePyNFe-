@@ -19,21 +19,24 @@ class CustoMedioFornecedorAPIView(APIView):
 
         # Ano atual (ou via query param se desejar flexibilidade)
         now = datetime.now()
-        ano_inicio = int(request.query_params.get("ano_inicio", now.year))
-        ano_fim = int(request.query_params.get("ano_fim", now.year))
+        ano_inicio = str(request.query_params.get("ano_inicio", now.year))
+        ano_fim = str(request.query_params.get("ano_fim", now.year))
 
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT * FROM analisar_custo_medio_fornecedor(%s, %s, %s)",
+                "SELECT * FROM analisar_participacao_fornecedores(%s, %s, %s)",
                 [empresa_id, ano_inicio, ano_fim]
             )
             columns = [col[0] for col in cursor.description]
-            row = cursor.fetchone()
+            rows = cursor.fetchall()  # Usando fetchall para pegar todas as linhas
 
-        if row is None:
-            return response.Response({}, status=204)  # Nenhum dado
+        if not rows:
+            return response.Response([], status=204)  # Nenhum dado
 
-        data_dict = dict(zip(columns, row))
-        serializer = CustoMedioFornecedorSerializer(data_dict)
+        # Converte todas as linhas em um dicionário
+        data_list = [dict(zip(columns, row)) for row in rows]
+
+        # Serializa a lista de dicionários
+        serializer = CustoMedioFornecedorSerializer(data_list, many=True)
 
         return response.Response(serializer.data)
