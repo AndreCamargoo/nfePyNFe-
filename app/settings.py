@@ -41,6 +41,9 @@ ALLOWED_HOSTS = [
     'api.allnube.com.br',
     'allnube.com.br',
 ]
+
+CURRENT_URL = os.getenv('API_URL')
+CURRENT_URL_FRONTEND_PASSWORD_REQUEST = os.getenv('URL_FRONTEND_PASSWORD_REQUEST')
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
@@ -91,7 +94,7 @@ ROOT_URLCONF = 'app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': ['templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -162,12 +165,29 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles/')
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
+
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+'''
+# Modo de Teste
+python manage.py shell
+from django.core.mail import send_mail
+send_mail('Test Subject', 'Test Message', 'adm@balancopadrao.com.br', ['andre.camargo@msn.com'])
+'''
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'adm@balancopadrao.com.br'
+EMAIL_HOST_PASSWORD = 'wnft pfno trdz tezp'
+DEFAULT_FROM_EMAIL = 'adm@balancopadrao.com.br'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

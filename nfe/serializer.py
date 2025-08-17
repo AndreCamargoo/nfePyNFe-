@@ -165,6 +165,7 @@ class NfeFaturamentoMesOutputSerializer(serializers.Serializer):
 
 class NfeProdutosOutputSerializer(serializers.Serializer):
     cean = serializers.CharField()
+    notas_fiscais_id = serializers.CharField()
     cprod = serializers.CharField()
     xprod = serializers.CharField()
     total_vendido = serializers.DecimalField(max_digits=20, decimal_places=2)

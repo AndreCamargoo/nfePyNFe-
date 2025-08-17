@@ -1,5 +1,12 @@
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str  # Corrigido aqui
+from django.template.loader import render_to_string
+from django.core.mail import send_mail
+from django.conf import settings
+
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -105,3 +112,66 @@ class UserUpdateProfile(APIView):
             'is_active': user.is_active,
             'is_staff': user.is_staff,
         }, status=status.HTTP_200_OK)
+
+
+class PasswordResetRequestAPIView(APIView):
+    def post(self, request):
+        email = request.data.get('email')
+
+        # Verifica se o e-mail existe no banco de dados
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'E-mail não encontrado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Cria o token de redefinição de senha
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+
+        # Envia o e-mail de notificação ao usuário
+        email_subject = 'Redefinição de Senha'
+        email_message = render_to_string('password_reset_email.txt', {
+            'user': user,
+            'uid': uid,
+            'token': token,
+            'url_end': settings.CURRENT_URL_FRONTEND_PASSWORD_REQUEST
+        })
+        send_mail(email_subject, email_message, 'noreply@example.com', [user.email])
+
+        # Retorna apenas uma confirmação de que o e-mail foi enviado
+        return Response({
+            'message': 'E-mail de redefinição de senha enviado. Verifique sua caixa de entrada.'
+        }, status=status.HTTP_200_OK)
+
+
+class PasswordResetConfirmAPIView(APIView):
+    def post(self, request):
+        uidb64 = request.data.get('uidb64')
+        token = request.data.get('token')
+
+        if not uidb64:
+            return Response({'error': 'UID é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not token:
+            return Response({'error': 'Token é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Decodifica o uid para obter o ID do usuário
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))  # Corrigido aqui
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({'error': 'Link de redefinição inválido ou expirado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verifica se o token é válido
+        if not default_token_generator.check_token(user, token):
+            return Response({'error': 'Token inválido ou expirado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Atualiza a senha
+        new_password = request.data.get('new_password')
+        if not new_password:
+            return Response({'error': 'Senha nova não fornecida.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save()
+
+        return Response({'message': 'Senha redefinida com sucesso!'}, status=status.HTTP_200_OK)
