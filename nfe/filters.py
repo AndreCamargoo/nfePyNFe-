@@ -1,15 +1,43 @@
+import datetime
 import django_filters
 from django.db.models import Q
 from .models import NotaFiscal, Produto, Emitente
+
+
+from django.db.models import Q
+import datetime
 
 
 class NotaFiscalFilter(django_filters.FilterSet):
     ide_cUF = django_filters.CharFilter(field_name='ide__cUF', lookup_expr='icontains')
     emitente_nome = django_filters.CharFilter(field_name='emitente__xNome', lookup_expr='icontains')
 
+    q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
+    dhEmi = django_filters.DateFromToRangeFilter(field_name='dhEmi')
+    emitente_CNPJ = django_filters.CharFilter(field_name='emitente__CNPJ', lookup_expr='icontains')
+    emitente_xNome = django_filters.CharFilter(field_name='emitente__xNome', lookup_expr='icontains')
+
     class Meta:
         model = NotaFiscal
-        fields = ['ide_cUF', 'emitente_nome']
+        fields = ['ide_cUF', 'emitente_nome', 'dhEmi', 'emitente_CNPJ', 'emitente_xNome']
+
+    def filter_by_q(self, queryset, name, value):
+        filters = (
+            Q(emitente__CNPJ__icontains=value) |
+            Q(emitente__xNome__icontains=value)
+        )
+
+        # Tenta interpretar como data (vários formatos)
+        possible_formats = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d']
+        for fmt in possible_formats:
+            try:
+                date_value = datetime.datetime.strptime(value, fmt).date()
+                filters |= Q(dhEmi__date=date_value)
+                break  # para no primeiro formato válido
+            except ValueError:
+                continue  # tenta próximo formato
+
+        return queryset.filter(filters)
 
 
 class ProdutoFilter(django_filters.FilterSet):

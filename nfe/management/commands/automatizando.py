@@ -70,6 +70,7 @@ class Command(BaseCommand):
 
                 if not response or not response.text.startswith('<'):
                     self.stderr.write(f'[ERRO] Resposta inválida para {empresa.razao_social}')
+                    print(f"Resposta completa:\n{response.text}")
                     continue
 
                 xml = response.text

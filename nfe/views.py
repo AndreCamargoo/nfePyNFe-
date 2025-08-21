@@ -31,6 +31,8 @@ from brazilfiscalreport.danfe import Danfe
 class NfeListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = (IsAuthenticated, GlobalDefaultPermission)
     queryset = models.NotaFiscal.objects.order_by('-pk').all()
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = NotaFiscalFilter
 
     def get_serializer_class(self):
         if self.request.method == 'POST':

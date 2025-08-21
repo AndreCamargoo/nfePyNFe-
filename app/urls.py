@@ -9,6 +9,7 @@ urlpatterns = [
     path('api/v1/', include('nfe.urls')),
     path('api/v1/', include('empresa.urls')),
     path('api/v1/', include('apexcharts.urls')),
+    path('api/v1/', include('notifications.urls')),
 ]
 
 # + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
