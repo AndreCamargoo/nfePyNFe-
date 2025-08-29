@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     # Apps
     'authentication',
     'nfe',
+    'nfe_evento',
     'empresa',
     'apexcharts',
 ]

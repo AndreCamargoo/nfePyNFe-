@@ -6,10 +6,10 @@ from empresa.serializer import EmpresaModelSerializer
 class NfeSerializer(serializers.ModelSerializer):
     # Dados body json
     empresa_id = serializers.IntegerField(write_only=True)
-    xml = serializers.CharField(write_only=True)
-    nus = serializers.CharField(write_only=True)
+    nsu = serializers.CharField(write_only=True)
     fileXml = serializers.CharField(write_only=True)
     filePdf = serializers.CharField(write_only=True)
+    tipo = serializers.CharField(write_only=True)
 
 
 class NfeModelSerializer(serializers.ModelSerializer):

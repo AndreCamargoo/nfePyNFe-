@@ -1,5 +1,4 @@
 import os
-import re
 from pathlib import Path
 
 from django_filters.rest_framework import DjangoFilterBackend

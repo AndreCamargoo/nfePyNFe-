@@ -1,9 +1,10 @@
 import os
+
 from django.conf import settings
+from django.db import transaction
 
 import xml.etree.ElementTree as ET
 from decimal import Decimal, InvalidOperation
-from django.db import transaction
 
 from empresa.models import HistoricoNSU
 from nfe.models import (
