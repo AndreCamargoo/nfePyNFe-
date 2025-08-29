@@ -42,29 +42,30 @@ class NfeListCreateAPIView(generics.ListCreateAPIView):
     def post(self, request, *args, **kwargs):
         try:
             empresa_id = request.data.get('empresa_id')
-            xml_string_raw = request.data.get('xml')
             nsu = request.data.get('nsu')
-            fileXml = request.data.get('fileXml')
+            fileXml = request.data.get('fileXml')  # Caminho do arquivo
+            tipo = request.data.get('tipo')  # Tipo de documento (ex: nfe_nsu, resumo_nsu, etc.)
 
-            if not empresa_id or not xml_string_raw or not nsu:
-                return response.Response({'error': 'empresa_id, xml e nsu são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
+            if not empresa_id or not nsu or not tipo or not fileXml:
+                return response.Response({'error': 'empresa_id, nsu, tipo e fileXml são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
 
             empresa = Empresa.objects.filter(pk=empresa_id).first()
             if not empresa:
                 return response.Response({'error': 'Empresa não encontrada.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Limpeza da string XML
-            xml_clean = str(xml_string_raw).replace('\\"', '"').replace('\n', '').replace('\r', '').replace('\t', '')
-            xml_clean = re.sub(r'\s+', ' ', xml_clean).strip()
+            # Processa o tipo e chama o NFeProcessor adequado
+            if tipo == 'nfe_nsu':
+                processor = NFeProcessor(empresa, nsu, fileXml)  # Passa o caminho do arquivo
+                nota = processor.processar(debug=False)
 
-            processor = NFeProcessor(empresa, xml_clean, nsu, fileXml)
-            nota = processor.processar(debug=False)
+                return response.Response({
+                    'message': 'XML processado com sucesso!',
+                    'chave': nota.chave,
+                    'versao': nota.versao
+                }, status=status.HTTP_200_OK)
 
-            return response.Response({
-                'message': 'XML processado com sucesso!',
-                'chave': nota.chave,
-                'versao': nota.versao
-            }, status=status.HTTP_200_OK)
+            else:
+                return response.Response({'error': 'Tipo de documento não suportado'}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             return response.Response({'error': f'Ocorreu um erro inesperado: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

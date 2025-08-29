@@ -1,3 +1,6 @@
+import os
+from django.conf import settings
+
 import xml.etree.ElementTree as ET
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
@@ -10,22 +13,39 @@ from nfe.models import (
 
 
 class NFeProcessor:
-    def __init__(self, empresa, xml, nsu, fileXml):
+    def __init__(self, empresa, nsu, fileXml):
         self.empresa = empresa
-        self.xml = xml
         self.nsu = nsu
-        self.fileXml = fileXml
+        self.fileXml = fileXml  # Caminho do arquivo XML
         self.ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+        self.xml = self._abrir_arquivo(fileXml)  # Lê o conteúdo do arquivo XML
         self.root = self._parse_xml()
         self.infNFe = None
 
+    def _abrir_arquivo(self, caminho_relativo):
+        """Constrói o caminho completo usando MEDIA_ROOT e abre o arquivo XML"""
+        # Remove 'media/' se estiver presente no caminho relativo
+        if caminho_relativo.startswith('media/'):
+            caminho_relativo = caminho_relativo[6:]  # Remove "media/"
+
+        # Constrói o caminho completo
+        caminho_completo = os.path.join(settings.MEDIA_ROOT, caminho_relativo)
+
+        if not os.path.exists(caminho_completo):
+            raise FileNotFoundError(f"Arquivo não encontrado: {caminho_completo}")
+
+        with open(caminho_completo, 'r', encoding='utf-8') as file:
+            return file.read()
+
     def _parse_xml(self):
+        """Processa o XML e retorna a raiz do documento"""
         try:
             return ET.fromstring(self.xml)
         except ET.ParseError as e:
             raise ValueError(f"Erro ao processar o XML: {str(e)}")
 
     def processar(self, debug=False):
+        """Processa o XML e realiza os registros no banco"""
         if debug:
             print(self.xml)
             return None
@@ -58,9 +78,11 @@ class NFeProcessor:
             return default
 
     def _criar_historico_nsu(self):
+        """Cria o histórico de NSU"""
         HistoricoNSU.objects.create(empresa=self.empresa, nsu=self.nsu)
 
     def _criar_nota_fiscal(self):
+        """Cria a nota fiscal no banco a partir do XML"""
         self.infNFe = self.root.find('.//nfe:infNFe', namespaces=self.ns)
 
         return NotaFiscal.objects.create(
@@ -70,7 +92,7 @@ class NFeProcessor:
             dhSaiEnt=self.infNFe.findtext('nfe:dhSaiEnt', namespaces=self.ns),
             tpAmb=1,
             empresa=self.empresa,
-            fileXml=self.fileXml
+            fileXml=self.fileXml  # Mantém o caminho relativo para armazenamento
         )
 
     def _criar_ide(self, nota_fiscal):
