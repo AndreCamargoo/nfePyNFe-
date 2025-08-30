@@ -8,6 +8,7 @@ urlpatterns = [
     path('api/v1/', include('authentication.urls')),
     path('api/v1/', include('nfe.urls')),
     path('api/v1/', include('nfe_evento.urls')),
+    path('api/v1/', include('nfe_resumo.urls')),
     path('api/v1/', include('empresa.urls')),
     path('api/v1/', include('apexcharts.urls')),
     path('api/v1/', include('notifications.urls')),

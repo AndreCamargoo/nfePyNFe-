@@ -100,16 +100,16 @@ class Command(BaseCommand):
                             # Define o nome do arquivo dependendo do tipo de schema
                             if tipo_schema == 'procNFe_v4.00.xsd':
                                 filename = f'nfe_nsu-{numero_nsu}.xml'
-                                tipo_documento = "nfe_nsu"  # Definido dinamicamente
-                                router = "nfe"
+                                tipo_documento = "nfe_nsu"
+                                endpoint = "nfes/"
                             elif tipo_schema == 'resNFe_v1.01.xsd':
                                 filename = f'resumo_nsu-{numero_nsu}.xml'
-                                tipo_documento = "resumo_nsu"  # Definido dinamicamente
-                                router = "resumo"
+                                tipo_documento = "resumo_nsu"
+                                endpoint = "nfes/resumo/"
                             else:
                                 filename = f'outro_nsu-{numero_nsu}.xml'
-                                tipo_documento = "outro_nsu"  # Definido dinamicamente
-                                router = "nfes/evento/"
+                                tipo_documento = "outro_nsu"
+                                endpoint = "nfes/evento/"
 
                             # Caminho absoluto para salvar o arquivo
                             filepath = os.path.join(xml_dir, filename)
@@ -127,7 +127,7 @@ class Command(BaseCommand):
                                     "fileXml": relative_path,  # Caminho relativo do arquivo XML
                                     "tipo": tipo_documento,  # Tipo de documento dinamicamente atribuído
                                 }
-                                api_url = f"{settings.API_URL}/{router}/"
+                                api_url = f"{settings.API_URL}/{endpoint}/"
                                 api_response = requests.post(api_url, json=data, headers=headers)
 
                                 if api_response.status_code == 200:
