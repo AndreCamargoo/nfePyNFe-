@@ -3,6 +3,7 @@ from .models import ResumoNFe
 
 
 class ResumoNFeSerializer(serializers.ModelSerializer):
+    tipo_documento_display = serializers.CharField(source='get_tipo_documento_display', read_only=True)
 
     class Meta:
         model = ResumoNFe

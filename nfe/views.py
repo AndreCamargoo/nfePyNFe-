@@ -9,7 +9,7 @@ from rest_framework import generics, status, response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from empresa.models import Empresa
+from empresa.models import Empresa, HistoricoNSU
 from .filters import (
     NotaFiscalFilter, ProdutoFilter, FornecedorFilter
 )
@@ -22,6 +22,7 @@ from nfe.serializer import (
     NfeFaturamentoMesOutputSerializer, NfeProdutosOutputSerializer
 )
 from nfe.processor.nfe_processor import NFeProcessor
+from nfe.processor.nfe_lote_zip import NFeLoteProcessor
 
 from datetime import datetime
 from brazilfiscalreport.danfe import Danfe
@@ -328,3 +329,37 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class ProcessarLoteNFeAPIView(APIView):
+    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+
+    def post(self, request, *args, **kwargs):
+        try:
+            empresa_id = request.data.get('empresa_id')
+            arquivo_zip = request.FILES.get('arquivo_zip')
+
+            if not empresa_id or not arquivo_zip:
+                return response.Response(
+                    {'error': 'empresa_id e arquivo_zip são obrigatórios'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            empresa = Empresa.objects.get(pk=empresa_id)
+
+            # Pegar o último NSU
+            historyNsu = HistoricoNSU.objects.filter(empresa=empresa).order_by('-id').first()
+            nsu_inicial = historyNsu.nsu if historyNsu else 0
+
+            # Processar o arquivo ZIP
+            resultados = NFeLoteProcessor(empresa, nsu_inicial, arquivo_zip).processar_zip()
+
+            return response.Response({
+                'mensagem': 'Processamento concluído',
+                'resultados': resultados
+            }, status=status.HTTP_200_OK)
+
+        except Empresa.DoesNotExist:
+            return response.Response({'error': 'Empresa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return response.Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

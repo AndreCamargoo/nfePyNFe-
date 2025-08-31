@@ -16,4 +16,5 @@ urlpatterns = [
     path('nfes/analises-faturamento-mes/', views.NfeFaturamentoMesAPIView.as_view(), name='nfe-analises-faturamento-mes'),
     path('nfes/analises-produdos/', views.NfeProdutosAPIView.as_view(), name='nfe-analises-produtos'),
     path('nfes/gerar-danfe/<int:pk>/', views.GerarDanfeAPIView.as_view(), name='nfe-gerar-danfe'),
+    path('nfes/processar-lote/', views.ProcessarLoteNFeAPIView.as_view(), name='nfe-processar-lote'),
 ]
