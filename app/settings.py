@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-a_h_jcaxpm1+pu&1kq31z9xp_i=s-39#t!crujpuozhm9@(i++')
 
-DEBUG = True  # ALTERE para False em produção
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 
 ALLOWED_HOSTS = [
     'localhost',
