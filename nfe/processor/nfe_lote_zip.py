@@ -49,7 +49,7 @@ class NFeLoteProcessor:
             mensagem_erro = f'{tipo_documento} duplicado (já existe no sistema)'
         else:
             # Outros erros - sanitizar mensagem
-            mensagem_erro = sanitizar_erro_banco(str(erro))
+            mensagem_erro = self.sanitizar_erro_banco(str(erro))
             mensagem_erro = f'Erro ao processar {tipo_documento}: {mensagem_erro}'
 
         resultados['erros'].append({
