@@ -16,7 +16,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-
 API_USERNAME = os.getenv('API_USERNAME')
 API_PASSWORD = os.getenv('API_PASSWORD')
 API_URL = os.getenv('API_URL')
@@ -24,14 +23,12 @@ API_URL = os.getenv('API_URL')
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-a_h_jcaxpm1+pu&1kq31z9xp_i=s-39#t!crujpuozhm9@(i++'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-a_h_jcaxpm1+pu&1kq31z9xp_i=s-39#t!crujpuozhm9@(i++')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = [
@@ -40,28 +37,75 @@ ALLOWED_HOSTS = [
     '177.153.20.14',
     'api.allnube.com.br',
     'allnube.com.br',
+    'www.allnube.com.br',
 ]
 
 CURRENT_URL = os.getenv('API_URL')
 CURRENT_URL_FRONTEND_PASSWORD_REQUEST = os.getenv('URL_FRONTEND_PASSWORD_REQUEST')
 CALLMEBOT_API_KEY = os.getenv('CALLMEBOT_API_KEY')
-CORS_ALLOW_ALL_ORIGINS = False
 
+# ==================== CORS & CSRF CONFIGURATION ====================
+# CORS Settings - PRODUCTION (HTTPS only)
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",           # Para dev local
-    "http://allnube.com.br",           # Produção sem HTTPS (por enquanto)
-    "https://allnube.com.br",          # Produção com HTTPS
-    "http://app.allnube.com.br",       # Se for usar subdomínio para frontend
-    "http://177.153.20.14",            # IP direto (se necessário)
+    "https://allnube.com.br",
+    "https://www.allnube.com.br",
 ]
 
-# Adicione esta configuração se quiser servir em um subcaminho (ex: /meuProjeto)
-# FORCE_SCRIPT_NAME = '/meuProjeto'
-# USE_X_FORWARDED_HOST = True
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    'authorization',
+    'content-type',
+    'x-requested-with',
+    'x-csrftoken',
+    'accept',
+    'origin',
+    'user-agent',
+]
+
+CORS_ALLOW_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://allnube.com.br",
+    "https://www.allnube.com.br",
+    "https://api.allnube.com.br",
+]
+
+# For development - add HTTP origins only in DEBUG mode
+if DEBUG:
+    CORS_ALLOWED_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ])
+    CSRF_TRUSTED_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ])
+
+# Security settings for production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
 
 # Application definition
-
 INSTALLED_APPS = [
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -111,29 +155,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'app.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-# Postgresql
 DATABASES = {
     'default': {
-        'ENGINE': os.getenv('DB_CONNECTION'),
-        'NAME': os.getenv('DB_DATABASE'),
-        'USER': os.getenv('DB_USERNAME'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+        'ENGINE': os.getenv('DB_CONNECTION', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_DATABASE', 'allnube_db'),
+        'USER': os.getenv('DB_USERNAME', 'allnube_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -153,50 +187,39 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'pt-BR'
-
 TIME_ZONE = 'America/Sao_Paulo'
-
 USE_I18N = True
-
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles/')
 
-MEDIA_URL = 'media/'
+MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 
-# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# File upload settings
+DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
 
-'''
-# Modo de Teste
-python manage.py shell
-from django.core.mail import send_mail
-send_mail('Test Subject', 'Test Message', 'adm@balancopadrao.com.br', ['andre.camargo@msn.com'])
-'''
-
+# Email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'adm@balancopadrao.com.br'
-EMAIL_HOST_PASSWORD = 'wnft pfno trdz tezp'
-DEFAULT_FROM_EMAIL = 'adm@balancopadrao.com.br'
-
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# REST Framework configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -210,3 +233,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=2),
 }
+
+# Custom settings
+APP_VERSION = '1.0.0'
+MAX_FILE_UPLOAD_SIZE = 104857600  # 100MB
