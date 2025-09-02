@@ -1,10 +1,10 @@
 import os
-import token
+import re
 import zipfile
 import tempfile
 
 from django.conf import settings
-import requests
+from django.db import IntegrityError
 
 from nfe.processor.nfe_processor import NFeProcessor
 from nfe_evento.processor.evento_processor import EventoNFeProcessor
@@ -18,6 +18,44 @@ class NFeLoteProcessor:
         self.empresa = empresa
         self.nsu = nsu
         self.arquivo_zip = arquivo_zip
+
+    def sanitizar_erro_banco(error_message):
+        """
+        Remove informações sensíveis do banco de dados das mensagens de erro
+        """
+        # Padrões para remover informações do banco
+        patterns = [
+            r'viola a restrição de unicidade "[^"]+"',
+            r'DETAIL:  Chave \([^)]+\)=\([^)]+\) já existe\.',
+            r'table "[^"]+"',
+            r'column "[^"]+"',
+            r'constraint "[^"]+"',
+            r'chave \([^)]+\)=\([^)]+\)',
+            r'Key \([^)]+\)=\([^)]+\)'
+        ]
+
+        mensagem_sanitizada = error_message
+        for pattern in patterns:
+            mensagem_sanitizada = re.sub(pattern, '[INFORMAÇÃO OCULTADA]', mensagem_sanitizada)
+
+        return mensagem_sanitizada
+
+    def _tratar_erro_seguro(self, erro, tipo_documento, caminho_relativo, resultados):
+        """
+        Trata erros de forma segura, sem expor informações do banco
+        """
+        if isinstance(erro, IntegrityError):
+            # Erro de duplicidade - mensagem genérica
+            mensagem_erro = f'{tipo_documento} duplicado (já existe no sistema)'
+        else:
+            # Outros erros - sanitizar mensagem
+            mensagem_erro = sanitizar_erro_banco(str(erro))
+            mensagem_erro = f'Erro ao processar {tipo_documento}: {mensagem_erro}'
+
+        resultados['erros'].append({
+            'arquivo': caminho_relativo,
+            'erro': mensagem_erro
+        })
 
     def processar_zip(self):
         """Processa o arquivo ZIP e extrai os XMLs"""
@@ -101,62 +139,48 @@ class NFeLoteProcessor:
 
     def _enviar_para_nfe(self, empresa, nsu, caminho_relativo, resultados):
         try:
-            # Passa o caminho do arquivo
             processor = NFeProcessor(empresa, nsu, caminho_relativo)
-            processor.processar()
+            nota = processor.processar()
 
-            if processor:
+            if nota:
                 resultados['nfe_processadas'] += 1
             else:
                 resultados['erros'].append({
                     'arquivo': caminho_relativo,
-                    'erro': f'Erro API NFe: {processor}'
+                    'erro': 'Erro ao processar NFe: Processamento retornou vazio'
                 })
 
         except Exception as e:
-            resultados['erros'].append({
-                'arquivo': caminho_relativo,
-                'erro': f'Erro ao processar NFe: {str(e)}'
-            })
+            self._tratar_erro_seguro(e, 'NFe', caminho_relativo, resultados)
 
     def _enviar_para_evento(self, empresa, nsu, caminho_relativo, resultados):
-        """Envia para o endpoint de eventos"""
         try:
-            # Passa o caminho do arquivo
             processor = EventoNFeProcessor(empresa, nsu, caminho_relativo)
-            processor.processar()
+            evento = processor.processar()
 
-            if processor:
+            if evento:
                 resultados['eventos_processados'] += 1
             else:
                 resultados['erros'].append({
                     'arquivo': caminho_relativo,
-                    'erro': f'Erro API NFe: {processor}'
+                    'erro': 'Erro ao processar Evento: Processamento retornou vazio'
                 })
 
         except Exception as e:
-            resultados['erros'].append({
-                'arquivo': caminho_relativo,
-                'erro': f'Erro ao processar Evento: {str(e)}'
-            })
+            self._tratar_erro_seguro(e, 'Evento', caminho_relativo, resultados)
 
     def _enviar_para_resumo(self, empresa, nsu, caminho_relativo, resultados):
-        """Envia para o endpoint de resumos"""
         try:
-            # Passa o caminho do arquivo
             processor = ResumoNFeProcessor(empresa, nsu, caminho_relativo)
-            processor.processar()
+            resumo = processor.processar()
 
-            if processor:
+            if resumo:
                 resultados['resumos_processados'] += 1
             else:
                 resultados['erros'].append({
                     'arquivo': caminho_relativo,
-                    'erro': f'Erro API NFe: {processor}'
+                    'erro': 'Erro ao processar Resumo: Processamento retornou vazio'
                 })
 
         except Exception as e:
-            resultados['erros'].append({
-                'arquivo': caminho_relativo,
-                'erro': f'Erro ao processar Resumo: {str(e)}'
-            })
+            self._tratar_erro_seguro(e, 'Resumo', caminho_relativo, resultados)

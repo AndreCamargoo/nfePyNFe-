@@ -84,16 +84,45 @@ class NFeProcessor:
 
     def _criar_nota_fiscal(self):
         """Cria a nota fiscal no banco a partir do XML"""
-        self.infNFe = self.root.find('.//nfe:infNFe', namespaces=self.ns)
+        # Tenta diferentes caminhos para encontrar o infNFe
+        inf_nfe_paths = [
+            './/nfe:infNFe',  # Para XMLs dentro de nfeProc
+            'nfe:infNFe',     # Para XMLs diretos
+            './/infNFe',      # Fallback sem namespace
+            'infNFe'          # Fallback sem namespace
+        ]
+
+        self.infNFe = None
+        for path in inf_nfe_paths:
+            self.infNFe = self.root.find(path, namespaces=self.ns)
+            if self.infNFe is not None:
+                break
+
+        if self.infNFe is None:
+            raise ValueError("Elemento infNFe não encontrado no XML")
+
+        # Buscar o elemento ide para pegar dhEmi e dhSaiEnt
+        ide_el = self.infNFe.find('nfe:ide', namespaces=self.ns)
+
+        if ide_el is not None:
+            dh_emi = ide_el.findtext('nfe:dhEmi', namespaces=self.ns)
+            dh_sai_ent = ide_el.findtext('nfe:dhSaiEnt', namespaces=self.ns)
+
+        # Função auxiliar para buscar texto seguro
+        def safe_findtext(element, path, default=None):
+            if element is None:
+                return default
+            found = element.find(path, namespaces=self.ns)
+            return found.text if found is not None else default
 
         return NotaFiscal.objects.create(
             chave=self.infNFe.attrib.get('Id', '').replace('NFe', ''),
             versao=self.infNFe.attrib.get('versao', ''),
-            dhEmi=self.infNFe.findtext('nfe:dhEmi', namespaces=self.ns),
-            dhSaiEnt=self.infNFe.findtext('nfe:dhSaiEnt', namespaces=self.ns),
+            dhEmi=safe_findtext(ide_el, 'nfe:dhEmi'),
+            dhSaiEnt=safe_findtext(ide_el, 'nfe:dhSaiEnt'),
             tpAmb=1,
             empresa=self.empresa,
-            fileXml=self.fileXml  # Mantém o caminho relativo para armazenamento
+            fileXml=self.fileXml
         )
 
     def _criar_ide(self, nota_fiscal):

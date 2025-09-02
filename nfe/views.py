@@ -29,7 +29,7 @@ from brazilfiscalreport.danfe import Danfe
 
 
 class NfeListCreateAPIView(generics.ListCreateAPIView):
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = (IsAuthenticated,)
     queryset = models.NotaFiscal.objects.order_by('-pk').all()
     filter_backends = [DjangoFilterBackend]
     filterset_class = NotaFiscalFilter
@@ -72,7 +72,7 @@ class NfeListCreateAPIView(generics.ListCreateAPIView):
 
 
 class NfeRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = (IsAuthenticated,)
     queryset = models.NotaFiscal.objects.all()
     serializer_class = NfeModelSerializer
 
@@ -165,7 +165,7 @@ class NfeFornecedorListAPIView(generics.ListAPIView):
 
 
 class NfeFornecedorDetailListAPIView(generics.RetrieveAPIView):
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = (IsAuthenticated,)
     queryset = models.Emitente.objects.all()
     serializer_class = EmitenteModelSerializer
 
@@ -260,7 +260,7 @@ class NfeProdutosAPIView(APIView):
 
 
 class GerarDanfeAPIView(generics.RetrieveAPIView):
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = (IsAuthenticated,)
     queryset = models.NotaFiscal.objects.all()
 
     @staticmethod
@@ -332,7 +332,7 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
 
 
 class ProcessarLoteNFeAPIView(APIView):
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = (IsAuthenticated,)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -357,7 +357,7 @@ class ProcessarLoteNFeAPIView(APIView):
             return response.Response({
                 'mensagem': 'Processamento concluído',
                 'resultados': resultados
-            }, status=status.HTTP_200_OK)
+            }, status=status.HTTP_201_CREATED)
 
         except Empresa.DoesNotExist:
             return response.Response({'error': 'Empresa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
