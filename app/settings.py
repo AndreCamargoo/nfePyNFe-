@@ -48,7 +48,7 @@ if DEBUG:
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
-    CORS_ALLOW_CREDENTIALS = True
+    CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais em desenvolvimento
 
     CSRF_TRUSTED_ORIGINS = [
         "http://localhost:3000",
@@ -57,9 +57,13 @@ if DEBUG:
         "http://127.0.0.1:8000",
     ]
 else:
-    # Em produção, permitir qualquer origem (com autenticação JWT)
-    CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOW_CREDENTIALS = False
+    # Em produção, permitir apenas origens específicas
+    CORS_ALLOWED_ORIGINS = [
+        "https://allnube.com.br",
+        "https://www.allnube.com.br",
+        "https://api.allnube.com.br",
+    ]
+    CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
     CSRF_TRUSTED_ORIGINS = [
         "https://allnube.com.br",
@@ -67,7 +71,7 @@ else:
         "https://api.allnube.com.br",
     ]
 
-# Cabeçalhos permitidos
+# Cabeçalhos permitidos para CORS
 CORS_ALLOW_HEADERS = [
     'authorization',
     'content-type',
@@ -78,7 +82,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
 ]
 
-# Métodos HTTP permitidos
+# Métodos HTTP permitidos para CORS
 CORS_ALLOW_METHODS = [
     'GET',
     'POST',
