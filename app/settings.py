@@ -182,6 +182,26 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# ==================== LOGS ====================
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs/error.log'),
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+    },
+}
+
 # ==================== I18N ====================
 
 LANGUAGE_CODE = 'pt-BR'
