@@ -20,6 +20,7 @@ class EventoNFe(models.Model):
     file_xml = models.FileField(upload_to='xml/', verbose_name='Arquivo XML')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         verbose_name = 'Evento NFe'

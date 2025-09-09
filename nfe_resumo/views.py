@@ -1,15 +1,22 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+
 from app.permissions import GlobalDefaultPermission
+
 from empresa.models import Empresa
+from nfe_resumo.models import ResumoNFe
+
 from nfe_resumo.processor.resumo_processor import ResumoNFeProcessor
 from nfe_resumo.serializers import ResumoNFeSerializer
 
 
-class ResumoNFeProcessAPIView(generics.CreateAPIView):
+class ResumoNFeProcessAPIView(generics.ListCreateAPIView):
     permission_classes = (IsAuthenticated, GlobalDefaultPermission)
     serializer_class = ResumoNFeSerializer
+
+    def get_queryset(self):
+        return ResumoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -35,3 +42,17 @@ class ResumoNFeProcessAPIView(generics.CreateAPIView):
             return Response({'error': 'Empresa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ResumoNFeRetriveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = (IsAuthenticated, )
+    serializer_class = ResumoNFeSerializer
+
+    def get_queryset(self):
+        return ResumoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True)
+
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.deleted_at = timezone.now()
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)

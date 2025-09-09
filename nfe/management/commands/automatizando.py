@@ -12,34 +12,18 @@ from pynfe.utils.descompactar import DescompactaGzip
 
 from empresa.models import Empresa, HistoricoNSU
 
+from nfe.processor.nfe_processor import NFeProcessor
+from nfe_resumo.processor.resumo_processor import ResumoNFeProcessor
+from nfe_evento.processor.evento_processor import EventoNFeProcessor
+
 
 class Command(BaseCommand):
     help = 'Consulta documentos NFe via SEFAZ, salva XML em media/xml/, envia para API e atualiza o NSU no banco.'
-
-    def obter_token(self):
-        login_url = f"{settings.API_URL}/authentication/token/"
-        login_data = {
-            "username": settings.API_USERNAME,
-            "password": settings.API_PASSWORD
-        }
-
-        try:
-            response = requests.post(login_url, json=login_data)
-            response.raise_for_status()
-            return response.json().get("access")
-        except requests.RequestException as e:
-            raise RuntimeError(f"[ERRO] Não foi possível autenticar: {e}")
 
     def handle(self, *args, **options):
         ns = {'ns': NAMESPACE_NFE}
         xml_dir = os.path.join(settings.MEDIA_ROOT, 'xml')
         os.makedirs(xml_dir, exist_ok=True)
-
-        token = self.obter_token()
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json',
-        }
 
         for empresa in Empresa.objects.all():
             cert_path = empresa.file.path
@@ -94,19 +78,42 @@ class Command(BaseCommand):
                     xml_descompactado = DescompactaGzip.descompacta(conteudo_zipado)
                     conteudo = etree.tostring(xml_descompactado, encoding='utf-8').decode('utf-8')
 
+                    '''
+                    Fluxo de Documentos
+
+                    O fluxo de documentos da SEFAZ, pode ser interpretado da seguinte forma:
+
+                    Primeiro Documento: Resumo da NFe (resumo_nsu), normalmente será o primeiro a ser recebido na consulta de distribuição. 
+                    Isso acontece porque o resumo é uma forma compacta que a SEFAZ envia após o processamento da NFe. Ele pode incluir informações sobre 
+                    o status da nota, como "autorizado", "cancelado", entre outros.
+
+                    Quando você deve agir: Ao receber o resumo_nsu, você já sabe o status da NFe e pode então verificar se a manifestação é necessária, 
+                    ou se a nota já foi processada de forma final. É a partir dessa confirmação que você pode realizar o manifesto (caso seja necessário).
+
+                    Segundo Documento: Nota Fiscal Eletrônica (nfe_nsu), esse é o documento completo que contém todos os dados da NFe. 
+                    Após o resumo da NFe, você recebe o XML completo da nota. Aqui, você pode obter a chave de acesso para realizar o 
+                    manifesto ou qualquer outra ação necessária.
+
+                    Quando você deve agir: Após receber a nfe_nsu, você já tem todas as informações detalhadas da nota e pode verificar o status da operação. 
+                    Se for o caso de manifestar a operação, esse é o momento de fazer a manifestação.
+
+                    Outros Documentos (outro_nsu): Eventos relacionados à NFe, como manifestações do destinatário (confirmação, desconhecimento, etc.) 
+                    ou outros tipos de eventos podem ser recebidos após a NFe ser processada.
+
+                    Quando você deve agir: Esses documentos, dependendo do tipo de evento, podem exigir uma ação. Por exemplo, se for um 
+                    evento de manifestação de destinatário, ele pode precisar ser assinado e enviado à SEFAZ como parte do processo de manifestação.
+                    '''
+
                     # Define o nome do arquivo dependendo do tipo de schema
                     if tipo_schema == 'procNFe_v4.00.xsd':
                         filename = f'nfe_nsu-{numero_nsu}.xml'
                         tipo_documento = "nfe_nsu"
-                        endpoint = "nfes/"
                     elif tipo_schema == 'resNFe_v1.01.xsd':
                         filename = f'resumo_nsu-{numero_nsu}.xml'
                         tipo_documento = "resumo_nsu"
-                        endpoint = "nfes/resumo/"
                     else:
                         filename = f'outro_nsu-{numero_nsu}.xml'
                         tipo_documento = "outro_nsu"
-                        endpoint = "nfes/evento/"
 
                     # Caminho absoluto para salvar o arquivo
                     filepath = os.path.join(xml_dir, filename)
@@ -117,23 +124,19 @@ class Command(BaseCommand):
                     relative_path = os.path.join('xml', filename)
                     self.stdout.write(f'[SALVO] Documento {numero_nsu} salvo em {relative_path}')
 
-                    try:
-                        data = {
-                            "empresa_id": empresa.id,
-                            "nsu": numero_nsu,
-                            "fileXml": relative_path,  # Caminho relativo do arquivo XML
-                            "tipo": tipo_documento,  # Tipo de documento dinamicamente atribuído
-                        }
-                        api_url = f"{settings.API_URL}/{endpoint}/"
-                        api_response = requests.post(api_url, json=data, headers=headers)
+                    if tipo_documento == "nfe_nsu":
+                        processor = NFeProcessor(empresa, numero_nsu, relative_path)
+                        processor.processar(debug=False)
+                        self.stdout.write(f'[OK] Documento {numero_nsu} processado')
 
-                        if api_response.status_code == 200:
-                            self.stdout.write(f'[OK] Documento {numero_nsu} enviado e processado com sucesso.')
-                        else:
-                            self.stderr.write(f'[ERRO] API respondeu com status {api_response.status_code}: {api_response.text}')
-
-                    except Exception as api_error:
-                        self.stderr.write(f'[ERRO] Falha ao enviar para API: {api_error}')
+                    elif tipo_documento == "resumo_nsu":
+                        processor = ResumoNFeProcessor(empresa, numero_nsu, relative_path)
+                        processor.processar()
+                        self.stdout.write(f'[OK] Resumo {numero_nsu} processado')
+                    else:
+                        processor = EventoNFeProcessor(empresa, numero_nsu, relative_path)
+                        processor.processar()
+                        self.stdout.write(f'[OK] Evento {numero_nsu} processado')
 
                 # Atualiza NSU no banco somente se resposta for válida
                 if cStat == "138":

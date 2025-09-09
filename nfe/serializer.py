@@ -11,6 +11,10 @@ class NfeSerializer(serializers.ModelSerializer):
     filePdf = serializers.CharField(write_only=True)
     tipo = serializers.CharField(write_only=True)
 
+    class Meta:
+        model = models.NotaFiscal
+        fields = '__all__'
+
 
 class NfeModelSerializer(serializers.ModelSerializer):
     empresa = EmpresaModelSerializer()

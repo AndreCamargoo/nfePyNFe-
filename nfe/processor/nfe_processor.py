@@ -104,10 +104,6 @@ class NFeProcessor:
         # Buscar o elemento ide para pegar dhEmi e dhSaiEnt
         ide_el = self.infNFe.find('nfe:ide', namespaces=self.ns)
 
-        if ide_el is not None:
-            dh_emi = ide_el.findtext('nfe:dhEmi', namespaces=self.ns)
-            dh_sai_ent = ide_el.findtext('nfe:dhSaiEnt', namespaces=self.ns)
-
         # Função auxiliar para buscar texto seguro
         def safe_findtext(element, path, default=None):
             if element is None:
@@ -115,15 +111,39 @@ class NFeProcessor:
             found = element.find(path, namespaces=self.ns)
             return found.text if found is not None else default
 
-        return NotaFiscal.objects.create(
-            chave=self.infNFe.attrib.get('Id', '').replace('NFe', ''),
-            versao=self.infNFe.attrib.get('versao', ''),
-            dhEmi=safe_findtext(ide_el, 'nfe:dhEmi'),
-            dhSaiEnt=safe_findtext(ide_el, 'nfe:dhSaiEnt'),
-            tpAmb=1,
-            empresa=self.empresa,
-            fileXml=self.fileXml
-        )
+        # Verifica se já existe uma nota fiscal com a mesma chave (e não deletada)
+        chave_nfe = self.infNFe.attrib.get('Id', '').replace('NFe', '')
+        nota_existente = NotaFiscal.objects.filter(chave=chave_nfe).first()
+
+        if nota_existente:
+            # Se a nota fiscal já existe e está marcada como deletada, reativa a nota
+            if nota_existente.deleted_at:
+                # Remove a data de deletação para reativar a nota
+                nota_existente.deleted_at = None
+                nota_existente.save()
+                return nota_existente
+            else:
+                # Caso contrário, cria uma nova nota fiscal (pois a chave é única)
+                return NotaFiscal.objects.create(
+                    chave=chave_nfe,
+                    versao=self.infNFe.attrib.get('versao', ''),
+                    dhEmi=safe_findtext(ide_el, 'nfe:dhEmi'),
+                    dhSaiEnt=safe_findtext(ide_el, 'nfe:dhSaiEnt'),
+                    tpAmb=1,
+                    empresa=self.empresa,
+                    fileXml=self.fileXml
+                )
+        else:
+            # Se não existir nenhuma nota com essa chave, cria uma nova
+            return NotaFiscal.objects.create(
+                chave=self.infNFe.attrib.get('Id', '').replace('NFe', ''),
+                versao=self.infNFe.attrib.get('versao', ''),
+                dhEmi=safe_findtext(ide_el, 'nfe:dhEmi'),
+                dhSaiEnt=safe_findtext(ide_el, 'nfe:dhSaiEnt'),
+                tpAmb=1,
+                empresa=self.empresa,
+                fileXml=self.fileXml
+            )
 
     def _criar_ide(self, nota_fiscal):
         ide_el = self.infNFe.find('.//nfe:ide', namespaces=self.ns)

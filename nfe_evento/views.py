@@ -6,14 +6,18 @@ from rest_framework.permissions import IsAuthenticated
 from app.permissions import GlobalDefaultPermission
 
 from empresa.models import Empresa
+from nfe_evento.models import EventoNFe
 
 from nfe_evento.processor.evento_processor import EventoNFeProcessor
 from nfe_evento.serializers import EventoNFeSerializer
 
 
-class EventoNFeProcessAPIView(generics.CreateAPIView):
+class EventoNFeProcessAPIView(generics.ListCreateAPIView):
     permission_classes = (IsAuthenticated, GlobalDefaultPermission)
     serializer_class = EventoNFeSerializer
+
+    def get_queryset(self):
+        return EventoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -37,3 +41,17 @@ class EventoNFeProcessAPIView(generics.CreateAPIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EventoNFeRetriveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = (IsAuthenticated, )
+    serializer_class = EventoNFeSerializer
+
+    def get_queryset(self):
+        return EventoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True)
+
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.deleted_at = timezone.now()
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)

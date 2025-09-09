@@ -11,6 +11,9 @@ class NotaFiscal(models.Model):
     tpAmb = models.IntegerField()
     fileXml = models.FileField(upload_to='xml/', null=True, blank=True)
     filePdf = models.FileField(upload_to='danfe/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return f"NF-e {self.chave}"

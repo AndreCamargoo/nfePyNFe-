@@ -34,6 +34,11 @@ class NfeListCreateAPIView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend]
     filterset_class = NotaFiscalFilter
 
+    def get_queryset(self):
+        return models.NotaFiscal.objects.filter(
+            empresa__usuario=self.request.user, deleted_at__isnull=True
+        ).order_by('-pk')
+
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return NfeSerializer
@@ -73,8 +78,18 @@ class NfeListCreateAPIView(generics.ListCreateAPIView):
 
 class NfeRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (IsAuthenticated,)
-    queryset = models.NotaFiscal.objects.all()
     serializer_class = NfeModelSerializer
+
+    def get_queryset(self):
+        return models.NotaFiscal.objects.filter(
+            empresa__usuario=self.request.user, deleted_at__isnull=True
+        )
+
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.deleted_at = timezone.now()
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class NfeListAPIView(generics.ListAPIView):
@@ -88,7 +103,10 @@ class NfeListAPIView(generics.ListAPIView):
         documento = self.kwargs.get('documento', None)
         empresas_filtradas = utils.get_empresas_filtradas(user=user, documento=documento)
 
-        nfe = models.NotaFiscal.objects.filter(empresa__in=empresas_filtradas).distinct()
+        nfe = models.NotaFiscal.objects.filter(
+            empresa__in=empresas_filtradas,
+            deleted_at__isnull=True
+        ).distinct()
 
         if nfe.exists():
             return nfe
@@ -166,8 +184,10 @@ class NfeFornecedorListAPIView(generics.ListAPIView):
 
 class NfeFornecedorDetailListAPIView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated,)
-    queryset = models.Emitente.objects.all()
     serializer_class = EmitenteModelSerializer
+
+    def get_queryset(self):
+        return models.Emitente.objects.filter(nota_fiscal__empresa__usuario=self.request.user)
 
 
 class NfeFaturamentoAPIView(APIView):
@@ -175,7 +195,7 @@ class NfeFaturamentoAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         # Empresa associada ao usuário
-        empresa_id = request.user.id  # ajusta conforme seu modelo
+        empresa_id = request.user.id
 
         # Mês e ano atual (ou via query param se desejar flexibilidade)
         now = datetime.now()
@@ -204,7 +224,7 @@ class NfeFaturamentoMesAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         # Empresa associada ao usuário
-        empresa_id = request.user.id  # ajusta conforme seu modelo
+        empresa_id = request.user.id
 
         # Ano atual (ou via query param se desejar flexibilidade)
         now = datetime.now()
@@ -232,7 +252,7 @@ class NfeProdutosAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         # Empresa associada ao usuário
-        empresa_id = request.user.id  # ajusta conforme seu modelo
+        empresa_id = request.user.id
 
         order = str(request.query_params.get("order", ""))
         limit = request.query_params.get("limit")
