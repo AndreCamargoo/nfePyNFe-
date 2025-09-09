@@ -1,6 +1,7 @@
 import os
 from django.conf import settings
 from django.db import transaction
+from django.utils.dateparse import parse_datetime
 import xml.etree.ElementTree as ET
 from empresa.models import HistoricoNSU
 from nfe_evento.models import EventoNFe, SignatureEvento, RetornoEvento
@@ -19,7 +20,6 @@ class EventoNFeProcessor:
         self.root = self._parse_xml()
 
     def _abrir_arquivo(self, caminho_relativo):
-        """Abre o arquivo XML"""
         if caminho_relativo.startswith('media/'):
             caminho_relativo = caminho_relativo[6:]
 
@@ -32,14 +32,12 @@ class EventoNFeProcessor:
             return file.read()
 
     def _parse_xml(self):
-        """Processa o XML"""
         try:
             return ET.fromstring(self.xml)
         except ET.ParseError as e:
             raise ValueError(f"Erro ao processar o XML: {str(e)}")
 
     def processar(self):
-        """Processa o evento NFe"""
         with transaction.atomic():
             self._criar_historico_nsu()
             evento = self._criar_evento()
@@ -48,15 +46,47 @@ class EventoNFeProcessor:
             return evento
 
     def _criar_historico_nsu(self):
-        """Cria o histórico de NSU"""
         HistoricoNSU.objects.create(empresa=self.empresa, nsu=self.nsu)
 
     def _criar_evento(self):
-        """Cria o evento principal"""
+        tag_name = self.root.tag.lower()
+
+        if 'resevento' in tag_name:
+            return self._criar_evento_resumido()
+        else:
+            return self._criar_evento_padrao()
+
+    def _criar_evento_resumido(self):
+        def get_text(tag):
+            el = self.root.find(f'nfe:{tag}', self.ns)
+            return el.text if el is not None else ''
+
+        def get_dt(tag):
+            dt_str = get_text(tag)
+            return parse_datetime(dt_str) if dt_str else None
+
+        return EventoNFe.objects.create(
+            empresa=self.empresa,
+            chave_nfe=get_text('chNFe'),
+            tipo_evento=get_text('tpEvento'),
+            sequencia_evento=int(get_text('nSeqEvento') or 0),
+            data_hora_evento=get_dt('dhEvento'),
+            data_hora_registro=get_dt('dhRecbto'),
+            descricao_evento=get_text('xEvento'),
+            numero_protocolo=get_text('nProt'),
+            status='',
+            motivo='',
+            versao_aplicativo='',
+            orgao=get_text('cOrgao'),
+            ambiente=1,  # valor padrão se não existir
+            cnpj_destinatario=get_text('CNPJ'),
+            file_xml=self.file_xml
+        )
+
+    def _criar_evento_padrao(self):
         inf_evento = self.root.find('.//nfe:infEvento', self.ns)
         det_evento = self.root.find('.//nfe:detEvento', self.ns)
 
-        # Função auxiliar para buscar texto seguro
         def safe_findtext(element, path, default=''):
             found = element.find(path, self.ns) if element is not None else None
             return found.text if found is not None else default
@@ -65,13 +95,16 @@ class EventoNFeProcessor:
             found = self.root.find(path, self.ns)
             return found.text if found is not None else default
 
+        def parse_dt(dt_str):
+            return parse_datetime(dt_str) if dt_str else None
+
         return EventoNFe.objects.create(
             empresa=self.empresa,
             chave_nfe=safe_findtext(inf_evento, 'nfe:chNFe'),
             tipo_evento=safe_findtext(inf_evento, 'nfe:tpEvento'),
             sequencia_evento=int(safe_findtext(inf_evento, 'nfe:nSeqEvento', '0')),
-            data_hora_evento=safe_findtext(inf_evento, 'nfe:dhEvento'),
-            data_hora_registro=safe_root_findtext('.//nfe:dhRegEvento'),
+            data_hora_evento=parse_dt(safe_findtext(inf_evento, 'nfe:dhEvento')),
+            data_hora_registro=parse_dt(safe_root_findtext('.//nfe:dhRegEvento')),
             descricao_evento=safe_findtext(det_evento, 'nfe:descEvento'),
             numero_protocolo=safe_root_findtext('.//nfe:nProt'),
             status=safe_root_findtext('.//nfe:cStat'),
@@ -84,15 +117,11 @@ class EventoNFeProcessor:
         )
 
     def _criar_signature(self, evento):
-        """Cria a assinatura digital"""
         signature = self.root.find('.//ds:Signature', self.ns)
         if signature:
-            # Usando find() para elementos e get() para atributos
             signed_info = signature.find('ds:SignedInfo', self.ns)
-
             canonicalization_el = signed_info.find('ds:CanonicalizationMethod', self.ns) if signed_info else None
             signature_el = signed_info.find('ds:SignatureMethod', self.ns) if signed_info else None
-
             reference = signed_info.find('ds:Reference', self.ns) if signed_info else None
             digest_method_el = reference.find('ds:DigestMethod', self.ns) if reference else None
 
@@ -107,9 +136,7 @@ class EventoNFeProcessor:
             )
 
     def _criar_retorno(self, evento):
-        """Cria o retorno do evento"""
         ret_evento = self.root.find('.//nfe:retEvento/nfe:infEvento', self.ns)
-
         if ret_evento:
             RetornoEvento.objects.create(
                 evento=evento,
@@ -123,6 +150,6 @@ class EventoNFeProcessor:
                 x_evento=ret_evento.findtext('nfe:xEvento', namespaces=self.ns),
                 n_seq_evento=int(ret_evento.findtext('nfe:nSeqEvento', namespaces=self.ns) or 0),
                 cnpj_dest=ret_evento.findtext('nfe:CNPJDest', namespaces=self.ns),
-                dh_reg_evento=ret_evento.findtext('nfe:dhRegEvento', namespaces=self.ns),
+                dh_reg_evento=parse_datetime(ret_evento.findtext('nfe:dhRegEvento', namespaces=self.ns)),
                 n_prot=ret_evento.findtext('nfe:nProt', namespaces=self.ns)
             )

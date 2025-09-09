@@ -95,13 +95,13 @@ CORS_ALLOW_METHODS = [
 # ==================== SECURITY SETTINGS (PRODUÇÃO) ====================
 
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
+    SECURE_SSL_REDIRECT = True  # Redirecionar para HTTPS
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Para quando estiver atrás de proxy
+    SESSION_COOKIE_SECURE = True  # Certifique-se de que os cookies são seguros (HTTPS)
+    CSRF_COOKIE_SECURE = True  # CSRF também requer HTTPS
+    SECURE_BROWSER_XSS_FILTER = True  # Protege contra ataques de XSS
+    SECURE_CONTENT_TYPE_NOSNIFF = True  # Impede sniffing de tipo de conteúdo
+    X_FRAME_OPTIONS = 'DENY'  # Evita que a página seja exibida em frames (clickjacking)
 
 # ==================== DJANGO CONFIG ====================
 
