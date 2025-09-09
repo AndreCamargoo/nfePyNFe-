@@ -17,7 +17,7 @@ class EventoNFeProcessAPIView(generics.ListCreateAPIView):
     serializer_class = EventoNFeSerializer
 
     def get_queryset(self):
-        return EventoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True)
+        return EventoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True).order_by('-data_hora_evento')
 
     def post(self, request, *args, **kwargs):
         try:

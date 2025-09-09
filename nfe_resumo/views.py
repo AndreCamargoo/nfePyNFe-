@@ -16,7 +16,7 @@ class ResumoNFeProcessAPIView(generics.ListCreateAPIView):
     serializer_class = ResumoNFeSerializer
 
     def get_queryset(self):
-        return ResumoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True)
+        return ResumoNFe.objects.filter(empresa__usuario=self.request.user, deleted_at__isnull=True).order_by('-data_emissao')
 
     def post(self, request, *args, **kwargs):
         try:

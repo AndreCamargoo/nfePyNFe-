@@ -37,7 +37,7 @@ class NfeListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         return models.NotaFiscal.objects.filter(
             empresa__usuario=self.request.user, deleted_at__isnull=True
-        ).order_by('-pk')
+        ).order_by('-dhEmi')
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
