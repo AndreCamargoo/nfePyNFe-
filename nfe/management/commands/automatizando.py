@@ -1,5 +1,4 @@
 import os
-import requests
 from re import sub
 from lxml import etree
 
@@ -26,6 +25,10 @@ class Command(BaseCommand):
         os.makedirs(xml_dir, exist_ok=True)
 
         for empresa in Empresa.objects.all():
+            if not empresa.file:  # sem certificado
+                self.stderr.write(f'[ERRO] Empresa {empresa.razao_social} não possui certificado associado.')
+                continue
+
             cert_path = empresa.file.path
             if not os.path.isfile(cert_path):
                 self.stderr.write(f'[ERRO] Certificado não encontrado: {cert_path}')
