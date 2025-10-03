@@ -1,0 +1,1144 @@
+openapi: 3.0.3
+info:
+  title: Your Project API
+  version: 1.0.0
+  description: Your project description
+paths:
+  /api/v1/accounts/signup/:
+    post:
+      operationId: 01_create_user
+      description: Cria um novo usuário com username, e-mail e senha.
+      summary: 01 Criar novo usuário
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileCreateRequestSerializerDocumentacaoRequest'
+            examples:
+              ExemploJSON:
+                value:
+                  username: usuario
+                  email: seuemail@exemplo.com.br
+                  password: senha123
+                summary: Exemplo JSON
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserProfileCreateRequestSerializerDocumentacaoRequest'
+            examples:
+              ExemploX-www-form-urlencoded:
+                value:
+                  username: usuario
+                  email: seuemail@exemplo.com.br
+                  password: senha123
+                summary: Exemplo x-www-form-urlencoded
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserProfileCreateRequestSerializerDocumentacaoRequest'
+            examples:
+              ExemploForm-data:
+                value:
+                  username: usuario
+                  email: seuemail@exemplo.com.br
+                  password: senha123
+                summary: Exemplo form-data
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileCreateResponseSerializerDocumentacao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                example:
+                  error: 'Os campos obrigatórios estão faltando: username, password'
+          description: ''
+  /api/v1/authentication/token/:
+    post:
+      operationId: 02_obtain_token
+      description: Autentica usuário e retorna tokens de acesso e refresh
+      summary: 02 Obter token JWT
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+            examples:
+              ExemploJSON:
+                value:
+                  username: usuario
+                  password: senha123
+                summary: Exemplo JSON
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+            examples:
+              ExemploX-www-form-urlencoded:
+                value:
+                  username: usuario
+                  password: senha123
+                summary: Exemplo x-www-form-urlencoded
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+            examples:
+              ExemploForm-data:
+                value:
+                  username: usuario
+                  password: senha123
+                summary: Exemplo form-data
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponseSerializerDocumentacao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+          description: ''
+  /api/v1/authentication/token/refresh/:
+    post:
+      operationId: 03_refresh_token
+      description: Recebe o refresh token e retorna um novo access token válido.
+      summary: 03 Atualizar token JWT
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh:
+                  type: string
+              required:
+              - refresh
+              example:
+                refresh: eyJ0eXAiOiJKV1QiLCJhbGci...
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponseSerializerDocumentacao'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+          description: ''
+  /api/v1/authentication/token/verify/:
+    post:
+      operationId: 04_verify_token
+      description: Verifica se um access ou refresh token ainda é válido.
+      summary: 04 Verificar validade do token JWT
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required:
+              - token
+              example:
+                token: eyJ0eXAiOiJKV1QiLCJhbGci...
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                example:
+                  detail: Token inválido ou expirado.
+          description: ''
+  /api/v1/authentication/token/me/:
+    get:
+      operationId: 05_obtain_user_profile
+      description: Retorna informações básicas do usuário atualmente autenticado usando
+        JWT.
+      summary: 05 Obter perfil do usuário autenticado
+      tags:
+      - Autenticação
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponseSerializerDocumentacao'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+          description: ''
+  /api/v1/accounts/users/{id}/:
+    put:
+      operationId: 06_update_user_profile
+      description: Atualiza os dados do perfil do usuário autenticado. Campos opcionais
+        podem ser enviados individualmente.
+      summary: 06 Atualizar perfil do usuário
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateProfileRequestSerializerDocumentacaoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserUpdateProfileRequestSerializerDocumentacaoRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserUpdateProfileRequestSerializerDocumentacaoRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserUpdateProfileResponseSerializerDocumentacao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                example:
+                  error: Este nome de usuário já está em uso.
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                example:
+                  error: Você não tem permissão para atualizar este perfil.
+          description: ''
+  /api/v1/accounts/password-reset/:
+    post:
+      operationId: 07_password_reset_request
+      description: Envia um e-mail com link e token para redefinição de senha do usuário.
+      summary: 07 Solicitar redefinição de senha
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequestSerializerDocumentacaoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequestSerializerDocumentacaoRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequestSerializerDocumentacaoRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetResponseSerializerDocumentacao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetErrorSerializerDocumentacao'
+          description: ''
+  /api/v1/accounts/change-password/:
+    post:
+      operationId: 08_password_reset_confirm
+      description: Valida o UID e token enviados por e-mail e permite redefinir a
+        senha do usuário.
+      summary: 08 Confirmar redefinição de senha
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequestSerializerDocumentacaoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequestSerializerDocumentacaoRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequestSerializerDocumentacaoRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetConfirmResponseSerializerDocumentacao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetConfirmErrorSerializerDocumentacao'
+          description: ''
+  /api/v1/empresas/:
+    get:
+      operationId: 01_empresa_list
+      description: Retorna todas as empresas vinculadas ao usuário autenticado **ou**
+        empresas que sejam filiais de alguma empresa pertencente ao usuário autenticado.
+      summary: 01 Listar empresas do usuário
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEmpresaListList'
+          description: ''
+    post:
+      operationId: 02_empresa_create
+      description: |-
+        Cria uma nova empresa vinculada ao usuário autenticado.
+
+        ### Regras de negócio:
+        - O campo **documento** deve ser único (não pode repetir).
+        - Se **matriz_filial** for informado:
+          - A empresa matriz deve **pertencer ao usuário autenticado**.
+          - A empresa matriz não pode ser uma filial (ou seja, deve ter `matriz_filial=null`).
+          - O usuário precisa já ter ao menos uma empresa **matriz** cadastrada.
+        - O campo **usuario** é automaticamente vinculado ao usuário autenticado.
+      summary: 02 Criar empresa
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmpresaCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmpresaCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmpresaCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpresaCreate'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+          description: ''
+  /api/v1/empresa/{id}/:
+    get:
+      operationId: 03_empresa_detail
+      description: |-
+        Retorna os dados de uma empresa específica.
+
+        ### Permissões:
+        - A empresa deve pertencer ao usuário autenticado **OU**
+        - Ser uma filial de alguma empresa pertencente ao usuário autenticado
+      summary: 03 Detalhar empresa
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpresaList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+          description: ''
+    put:
+      operationId: api_v1_empresa_update
+      description: |-
+        Atualiza **todos os campos** de uma empresa.
+
+        ### Permissões:
+        - A empresa deve pertencer ao usuário autenticado **OU**
+        - Ser uma filial de alguma empresa pertencente ao usuário autenticado
+      summary: 04 Atualizar empresa (PUT)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmpresaUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmpresaUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmpresaUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpresaUpdate'
+          description: ''
+    patch:
+      operationId: api_v1_empresa_partial_update
+      description: |-
+        Atualiza **parcialmente** os campos de uma empresa.
+
+        ### Permissões:
+        - A empresa deve pertencer ao usuário autenticado **OU**
+        - Ser uma filial de alguma empresa pertencente ao usuário autenticado
+      summary: 05 Atualizar empresa (PATCH)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEmpresaUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEmpresaUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEmpresaUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpresaUpdate'
+          description: ''
+    delete:
+      operationId: api_v1_empresa_destroy
+      description: |-
+        Remove uma empresa.
+
+        ### Permissões:
+        - A empresa deve pertencer ao usuário autenticado **OU**
+        - Ser uma filial de alguma empresa pertencente ao usuário autenticado
+      summary: 06 Deletar empresa
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+          description: ''
+  /api/v1/categorias/:
+    get:
+      operationId: 01_listar_categorias
+      description: Retorna a lista de categorias e subcategorias de empresas.
+      summary: 01Listar todas as categorias de empresas
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Categoria empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoriaEmpresaModelList'
+          description: ''
+components:
+  schemas:
+    CategoriaEmpresaModel:
+      type: object
+      description: Serializer para CategoriaEmpresa
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 100
+        descricao:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        parent:
+          type: integer
+          nullable: true
+      required:
+      - created_at
+      - id
+      - nome
+      - updated_at
+    CustomTokenObtainPairRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    EmpresaCreate:
+      type: object
+      description: Serializer específico para criação
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        razao_social:
+          type: string
+          maxLength: 200
+        documento:
+          type: string
+          maxLength: 18
+        ie:
+          type: string
+          maxLength: 15
+        uf:
+          $ref: '#/components/schemas/UfEnum'
+        file:
+          type: string
+          format: uri
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        usuario:
+          type: integer
+        categoria:
+          type: integer
+          nullable: true
+        matriz_filial:
+          type: integer
+          nullable: true
+      required:
+      - created_at
+      - id
+      - updated_at
+    EmpresaCreateRequest:
+      type: object
+      description: Serializer específico para criação
+      properties:
+        razao_social:
+          type: string
+          minLength: 1
+          maxLength: 200
+        documento:
+          type: string
+          minLength: 1
+          maxLength: 18
+        ie:
+          type: string
+          minLength: 1
+          maxLength: 15
+        uf:
+          $ref: '#/components/schemas/UfEnum'
+        senha:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 255
+        file:
+          type: string
+          format: binary
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        usuario:
+          type: integer
+        categoria:
+          type: integer
+          nullable: true
+        matriz_filial:
+          type: integer
+          nullable: true
+      required:
+      - senha
+    EmpresaList:
+      type: object
+      description: Serializer para listagem (pode incluir campos calculados ou relacionados)
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        razao_social:
+          type: string
+          maxLength: 200
+        documento:
+          type: string
+          maxLength: 18
+        ie:
+          type: string
+          maxLength: 15
+        uf:
+          $ref: '#/components/schemas/UfEnum'
+        file:
+          type: string
+          format: uri
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        usuario:
+          type: integer
+        categoria:
+          type: integer
+          nullable: true
+        matriz_filial:
+          type: integer
+          nullable: true
+      required:
+      - created_at
+      - id
+      - updated_at
+    EmpresaUpdate:
+      type: object
+      description: Serializer específico para atualização
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        razao_social:
+          type: string
+          maxLength: 200
+        documento:
+          type: string
+          maxLength: 18
+        ie:
+          type: string
+          maxLength: 15
+        uf:
+          $ref: '#/components/schemas/UfEnum'
+        file:
+          type: string
+          format: uri
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        usuario:
+          type: integer
+          readOnly: true
+        categoria:
+          type: integer
+          nullable: true
+        matriz_filial:
+          type: integer
+          nullable: true
+      required:
+      - created_at
+      - id
+      - updated_at
+      - usuario
+    EmpresaUpdateRequest:
+      type: object
+      description: Serializer específico para atualização
+      properties:
+        razao_social:
+          type: string
+          minLength: 1
+          maxLength: 200
+        documento:
+          type: string
+          minLength: 1
+          maxLength: 18
+        ie:
+          type: string
+          minLength: 1
+          maxLength: 15
+        uf:
+          $ref: '#/components/schemas/UfEnum'
+        senha:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 255
+        file:
+          type: string
+          format: binary
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        categoria:
+          type: integer
+          nullable: true
+        matriz_filial:
+          type: integer
+          nullable: true
+    PaginatedCategoriaEmpresaModelList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoriaEmpresaModel'
+    PaginatedEmpresaListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmpresaList'
+    PasswordResetConfirmErrorSerializerDocumentacao:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensagem de erro caso falhe a validação ou token expirado
+      required:
+      - error
+    PasswordResetConfirmRequestSerializerDocumentacaoRequest:
+      type: object
+      properties:
+        uidb64:
+          type: string
+          minLength: 1
+          description: UID codificado do usuário enviado no e-mail
+        token:
+          type: string
+          minLength: 1
+          description: Token de redefinição de senha enviado no e-mail
+        new_password:
+          type: string
+          minLength: 1
+          description: Nova senha do usuário
+      required:
+      - new_password
+      - token
+      - uidb64
+    PasswordResetConfirmResponseSerializerDocumentacao:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Mensagem de confirmação de que a senha foi redefinida com sucesso
+      required:
+      - message
+    PasswordResetErrorSerializerDocumentacao:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensagem de erro caso o e-mail não seja encontrado
+      required:
+      - error
+    PasswordResetRequestSerializerDocumentacaoRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: E-mail do usuário para envio do link de redefinição de senha
+      required:
+      - email
+    PasswordResetResponseSerializerDocumentacao:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Confirmação de que o e-mail de redefinição foi enviado
+      required:
+      - message
+    PatchedEmpresaUpdateRequest:
+      type: object
+      description: Serializer específico para atualização
+      properties:
+        razao_social:
+          type: string
+          minLength: 1
+          maxLength: 200
+        documento:
+          type: string
+          minLength: 1
+          maxLength: 18
+        ie:
+          type: string
+          minLength: 1
+          maxLength: 15
+        uf:
+          $ref: '#/components/schemas/UfEnum'
+        senha:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 255
+        file:
+          type: string
+          format: binary
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        categoria:
+          type: integer
+          nullable: true
+        matriz_filial:
+          type: integer
+          nullable: true
+    StatusEnum:
+      enum:
+      - '1'
+      - '2'
+      type: string
+      description: |-
+        * `1` - Ativo
+        * `2` - Inativo
+    TokenRefreshResponseSerializerDocumentacao:
+      type: object
+      properties:
+        access:
+          type: string
+      required:
+      - access
+    TokenResponseSerializerDocumentacao:
+      type: object
+      properties:
+        refresh:
+          type: string
+        access:
+          type: string
+      required:
+      - access
+      - refresh
+    UfEnum:
+      enum:
+      - AC
+      - AL
+      - AP
+      - AM
+      - BA
+      - CE
+      - DF
+      - ES
+      - GO
+      - MA
+      - MT
+      - MS
+      - MG
+      - PA
+      - PB
+      - PR
+      - PE
+      - PI
+      - RJ
+      - RN
+      - RS
+      - RO
+      - RR
+      - SC
+      - SP
+      - SE
+      - TO
+      type: string
+      description: |-
+        * `AC` - Acre
+        * `AL` - Alagoas
+        * `AP` - Amapá
+        * `AM` - Amazonas
+        * `BA` - Bahia
+        * `CE` - Ceará
+        * `DF` - Distrito Federal
+        * `ES` - Espírito Santo
+        * `GO` - Goiás
+        * `MA` - Maranhão
+        * `MT` - Mato Grosso
+        * `MS` - Mato Grosso do Sul
+        * `MG` - Minas Gerais
+        * `PA` - Pará
+        * `PB` - Paraíba
+        * `PR` - Paraná
+        * `PE` - Pernambuco
+        * `PI` - Piauí
+        * `RJ` - Rio de Janeiro
+        * `RN` - Rio Grande do Norte
+        * `RS` - Rio Grande do Sul
+        * `RO` - Rondônia
+        * `RR` - Roraima
+        * `SC` - Santa Catarina
+        * `SP` - São Paulo
+        * `SE` - Sergipe
+        * `TO` - Tocantins
+    UserProfileCreateRequestSerializerDocumentacaoRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+      - username
+    UserProfileCreateResponseSerializerDocumentacao:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      - id
+      - username
+    UserProfileResponseSerializerDocumentacao:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+      - email
+      - first_name
+      - id
+      - last_name
+      - username
+    UserUpdateProfileRequestSerializerDocumentacaoRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          minLength: 1
+        first_name:
+          type: string
+          minLength: 1
+        last_name:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+    UserUpdateProfileResponseSerializerDocumentacao:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+      - email
+      - first_name
+      - id
+      - last_name
+      - username
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
