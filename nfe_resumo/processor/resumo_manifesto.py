@@ -96,18 +96,22 @@ class ManifestoNFeProcessor:
             ns = {"ns": "http://www.portalfiscal.inf.br/nfe"}
             cstat_lote = root.findtext(".//ns:cStat", namespaces=ns)
             xmotivo_lote = root.findtext(".//ns:xMotivo", namespaces=ns)
+
             if cstat_lote != "128":  # 128 = lote processado
                 return {
                     "success": False,
                     "erro": f"Lote não processado: {cstat_lote} - {xmotivo_lote}",
                     "status": cstat_lote,
                 }
+
             inf_evento = root.find(".//ns:retEvento/ns:infEvento", ns)
+
             if inf_evento is None:
                 return {
                     "success": False,
                     "erro": "Resposta inválida da Sefaz - infEvento não encontrado",
                 }
+
             cstat = inf_evento.findtext("ns:cStat", namespaces=ns)
             xmotivo = inf_evento.findtext("ns:xMotivo", namespaces=ns)
             nprot = inf_evento.findtext("ns:nProt", namespaces=ns)
@@ -117,19 +121,23 @@ class ManifestoNFeProcessor:
 
             # 135 = sucesso, 573 = duplicidade
             if cstat in ["135", "573"]:
+
                 if cstat == "573" and not nprot:
                     evento_existente = EventoNFe.objects.filter(
                         chave_nfe=self.resumo.chave_nfe,
                         tipo_evento=tipo_manifestacao
                     ).order_by("-id").first()
+
                     if evento_existente and evento_existente.numero_protocolo:
                         nprot = evento_existente.numero_protocolo
                     else:
                         nprot = f"DUP-{self.resumo.chave_nfe[-8:]}"
+
                 evento = self._salvar_evento_manifestacao(
                     resposta_xml, xml_assinado, tipo_manifestacao,
                     cstat, xmotivo, nprot, dh_reg_evento, tp_evento, n_seq_evento
                 )
+
                 return {
                     "success": True,
                     "mensagem": xmotivo,
@@ -175,6 +183,7 @@ class ManifestoNFeProcessor:
             "28": "SE", "29": "BA", "31": "MG", "32": "ES", "33": "RJ", "35": "SP", "41": "PR",
             "42": "SC", "43": "RS", "50": "MS", "51": "MT", "52": "GO", "53": "DF",
         }
+
         uf_chave = self.resumo.chave_nfe[:2]
         uf_autorizadora = codigos_uf.get(uf_chave, "")
 
