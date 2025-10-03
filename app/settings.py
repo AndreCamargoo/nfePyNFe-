@@ -118,6 +118,8 @@ INSTALLED_APPS = [
     'rest_framework',
     # Simplejwt
     'rest_framework_simplejwt',
+    # Documentação
+    'drf_spectacular',
     # Apps
     'authentication',
     'nfe',
@@ -260,3 +262,34 @@ SIMPLE_JWT = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 APP_VERSION = '1.0.0'
 MAX_FILE_UPLOAD_SIZE = 104857600  # 100MB
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Your Project API',
+    'DESCRIPTION': 'Your project description',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+
+    # Determina como as operações devem ser classificadas. Se você pretende fazer a classificação com um
+    # PREPROCESSING_HOOKS, certifique-se de desabilitar esta configuração. Se configurado, a classificação
+    # é aplicada após o PREPROCESSING_HOOKS. Aceita
+    # True (alpha-sorter do drf-spectacular), False ou um valor invocável para o argumento-chave de classificação.
+    'SORT_OPERATIONS': False,  # Não ordenar automaticamente
+
+    # Determina se os parâmetros da operação devem ser classificados alfanumericamente ou apenas
+    # na ordem em que chegaram. Aceita Verdadeiro, Falso ou um valor invocável para o argumento-chave da classificação.
+    'SORT_OPERATION_PARAMETERS': False,
+
+    'COMPONENT_SPLIT_REQUEST': True,
+
+    'COMPONENT_SECURITY_SCHEMES': {
+        'bearerAuth': {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT',
+        },
+    },
+
+    'PREPROCESSING_HOOKS': [
+        'app.schema_hooks.remove_specific_paths',
+    ],
+}
