@@ -4,7 +4,10 @@ from . import views
 
 urlpatterns = [
     path('empresas/', views.EmpresaListCreateAPIView.as_view(), name='empresa-create-list'),
-    path('empresas/<int:pk>/', views.EmpresaRetrieveUpdateDestroyAPIView.as_view(), name='empresa-detail-view'),
-    path('empresas/<int:usuario_id>/usuario/', views.EmpresaPorUsuarioAPIView.as_view(), name='empresas-por-usuario'),
-    path('empresas/filiais/', views.FiliaisListCreateAPIView.as_view(), name='empresa-detail-view')
+    path('empresa/<int:pk>/', views.EmpresaRetrieveUpdateDestroyAPIView.as_view(), name='empresa-detail-view'),
+
+    path('categorias/', views.CategoriaEmpresaListCreateAPIView.as_view(), name='categoriaempresa-create-list'),
+    path('categoria/<int:pk>/', views.CategoriaEmpresaRetrieveUpdateDestroyAPIView.as_view(), name='categoriaempresa-detail-view'),
+
+    path('database/', views.ConexaoBancoListCreateAPIView.as_view(), name='conexaobanco-create-list'),
 ]
