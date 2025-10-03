@@ -10,8 +10,6 @@ from sistema.serializer import (
     GrupoRotaSistemaListSerializer, GrupoRotaSistemaCreateSerializer
 )
 
-from app.utils.sistema_permissions import IsAuthenticatedCustom
-
 
 class SistemaListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsAdminUser, GlobalDefaultPermission]
@@ -58,7 +56,7 @@ class RotaSistemaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
 
 
 class GrupoRotaSistemaListCreateAPIView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticatedCustom]
+    permission_classes = [IsAuthenticated]
     serializer_class = GrupoRotaSistemaCreateSerializer
 
     def get_queryset(self):
@@ -83,7 +81,7 @@ class GrupoRotaSistemaListCreateAPIView(generics.ListCreateAPIView):
 
 
 class GrupoRotaSistemaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticatedCustom]
+    permission_classes = [IsAuthenticated]
     serializer_class = GrupoRotaSistemaListSerializer
 
     def get_queryset(self):
