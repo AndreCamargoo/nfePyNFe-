@@ -1,68 +1,393 @@
 openapi: 3.0.3
 info:
-  title: Your Project API
+  title: Azevedo sistemas
   version: 1.0.0
-  description: Your project description
+  description: Documentação dos sistemas da azevedo
 paths:
-  /api/v1/authentication/token/me/:
-    get:
-      operationId: api_v1_authentication_token_me_retrieve
+  /api/v1/authentication/token/:
+    post:
+      operationId: 01_obter_token_acesso
+      description: Retorna um par de tokens (access e refresh) para autenticação JWT.
+      summary: 01 Obter token de acesso
       tags:
-      - api
-      security:
-      - jwtAuth: []
+      - Autenticação
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Nome de usuário
+                password:
+                  type: string
+                  format: password
+                  description: Senha do usuário
+              required:
+              - username
+              - password
+            examples:
+              ExemploDeRequisição:
+                value:
+                  username: usuario123
+                  password: senha123
+                summary: Exemplo de requisição
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ExemploDeResposta:
+                  value:
+                    access: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                    refresh: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                  summary: Exemplo de resposta
+          description: Tokens gerados com sucesso
+        '401':
+          description: Credenciais inválidas
+  /api/v1/authentication/token/refresh/:
+    post:
+      operationId: 02_atualizar_token_acesso
+      description: Usa o token de refresh para obter um novo token de acesso.
+      summary: 02 Atualizar token de acesso
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                refresh:
+                  type: string
+                  description: Token de refresh
+              required:
+              - refresh
+            examples:
+              ExemploDeRequisição:
+                value:
+                  refresh: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                summary: Exemplo de requisição
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ExemploDeResposta:
+                  value:
+                    access: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                  summary: Exemplo de resposta
+          description: Token atualizado com sucesso
+        '401':
+          description: Token de refresh inválido ou expirado
+  /api/v1/authentication/token/verify/:
+    post:
+      operationId: 03_verificar_token_acesso
+      description: Verifica se um token (access ou refresh) é válido.
+      summary: 03 Verificar token
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: Token a ser verificado
+              required:
+              - token
+            examples:
+              ExemploDeRequisição:
+                value:
+                  token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                summary: Exemplo de requisição
+      responses:
+        '200':
+          description: Token válido
+        '401':
+          description: Token inválido
   /api/v1/accounts/signup/:
     post:
-      operationId: api_v1_accounts_signup_create
+      operationId: 04_criar_novo_usuario
+      description: Cria uma nova conta de usuário no sistema.
+      summary: 04 Criar novo usuário
       tags:
-      - api
-      security:
-      - jwtAuth: []
-      - {}
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Nome de usuário único
+                email:
+                  type: string
+                  format: email
+                  description: E-mail do usuário
+                password:
+                  type: string
+                  format: password
+                  description: Senha do usuário
+              required:
+              - username
+              - email
+              - password
+            examples:
+              ExemploDeRequisição:
+                value:
+                  username: novousuario
+                  email: novo@example.com
+                  password: senhasegura123
+                summary: Exemplo de requisição
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ExemploDeRequisição:
+                  value:
+                    username: novousuario
+                    email: novo@example.com
+                    password: senhasegura123
+                  summary: Exemplo de requisição
+                ExemploDeResposta:
+                  value:
+                    id: 1
+                    username: usuario123
+                    email: usuario@example.com
+                  summary: Exemplo de resposta
+          description: Usuário criado com sucesso
+        '400':
+          description: Dados inválidos ou campos faltando
+  /api/v1/accounts/password-reset/:
+    post:
+      operationId: 05_solicitar_redefinicao_senha
+      description: Solicita o envio de um e-mail com link para redefinição de senha.
+      summary: 05 Solicitar redefinição de senha
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: E-mail cadastrado
+              required:
+              - email
+            examples:
+              ExemploDeRequisição:
+                value:
+                  email: usuario@example.com
+                summary: Exemplo de requisição
       responses:
         '200':
-          description: No response body
+          description: E-mail enviado com sucesso
+        '400':
+          description: E-mail não encontrado
+  /api/v1/accounts/change-password/:
+    post:
+      operationId: 06_confirmar_redefinicao_senha
+      description: Confirma a redefinição de senha usando o token recebido por e-mail.
+      summary: 06 Confirmar redefinição de senha
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uidb64:
+                  type: string
+                  description: UID codificado em base64 do usuário
+                token:
+                  type: string
+                  description: Token de redefinição
+                new_password:
+                  type: string
+                  format: password
+                  description: Nova senha
+              required:
+              - uidb64
+              - token
+              - new_password
+            examples:
+              ExemploDeRequisição:
+                value:
+                  uidb64: MQ
+                  token: abc123def456
+                  new_password: novasenha123
+                summary: Exemplo de requisição
+      responses:
+        '200':
+          description: Senha redefinida com sucesso
+        '400':
+          description: Dados inválidos
+  /api/v1/authentication/token/me/:
+    get:
+      operationId: 01_obter_perfil
+      description: Retorna os dados do perfil do usuário autenticado.
+      summary: 01 Obter perfil do usuário
+      tags:
+      - Perfil do Usuário
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ExemploDeResposta:
+                  value:
+                    id: 1
+                    username: usuario123
+                    email: usuario@example.com
+                    first_name: João
+                    last_name: Silva
+                  summary: Exemplo de resposta
+          description: Dados do perfil obtidos com sucesso
+        '401':
+          description: Usuário não autenticado
   /api/v1/accounts/users/{id}/:
     put:
-      operationId: api_v1_accounts_users_update
+      operationId: 02_atualizar_perfil
+      description: Atualiza os dados do perfil do usuário.
+      summary: 02 Atualizar perfil do usuário
       parameters:
       - in: path
         name: id
         schema:
           type: integer
         required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        description: ID do usuário a ser atualizado
+        required: true
       tags:
-      - api
+      - Perfil do Usuário
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Novo nome de usuário
+                email:
+                  type: string
+                  format: email
+                  description: Novo e-mail
+                first_name:
+                  type: string
+                  description: Novo primeiro nome
+                last_name:
+                  type: string
+                  description: Novo sobrenome
+                password:
+                  type: string
+                  format: password
+                  description: Nova senha
+            examples:
+              ExemploDeRequisiçãoParaUsuárioNormal:
+                value:
+                  first_name: João
+                  last_name: Silva
+                  email: joao.silva@example.com
+                summary: Exemplo de requisição para usuário normal
+              ExemploDeRequisiçãoParaSuperusuário:
+                value:
+                  first_name: João
+                  last_name: Silva
+                  email: joao.silva@example.com
+                  is_active: true
+                  is_staff: true
+                summary: Exemplo de requisição para superusuário
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
-  /api/v1/accounts/password-reset/:
-    post:
-      operationId: api_v1_accounts_password_reset_create
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ExemploDeRequisiçãoParaUsuárioNormal:
+                  value:
+                    first_name: João
+                    last_name: Silva
+                    email: joao.silva@example.com
+                  summary: Exemplo de requisição para usuário normal
+                ExemploDeRequisiçãoParaSuperusuário:
+                  value:
+                    first_name: João
+                    last_name: Silva
+                    email: joao.silva@example.com
+                    is_active: true
+                    is_staff: true
+                  summary: Exemplo de requisição para superusuário
+                ExemploDeResposta:
+                  value:
+                    id: 1
+                    username: usuario123
+                    email: usuario@example.com
+                    first_name: João
+                    last_name: Silva
+                    is_active: true
+                    is_staff: false
+                  summary: Exemplo de resposta
+          description: Perfil atualizado com sucesso
+        '400':
+          description: Dados inválidos
+        '403':
+          description: Permissão negada
+  /api/v1/categorias/:
+    get:
+      operationId: 01_listar_categorias
+      description: Retorna a lista de categorias e subcategorias de empresas.
+      summary: 01 Listar todas as categorias de empresas
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       tags:
-      - api
+      - Categoria empresa
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
-          description: No response body
-  /api/v1/accounts/change-password/:
-    post:
-      operationId: api_v1_accounts_change_password_create
-      tags:
-      - api
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoriaEmpresaModelList'
+          description: ''
   /api/v1/empresas/:
     get:
       operationId: 01_empresa_list
@@ -273,34 +598,20 @@ paths:
                   detail:
                     type: string
           description: ''
-  /api/v1/categorias/:
-    get:
-      operationId: 01_listar_categorias
-      description: Retorna a lista de categorias e subcategorias de empresas.
-      summary: 01 Listar todas as categorias de empresas
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      tags:
-      - Categoria empresa
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedCategoriaEmpresaModelList'
-          description: ''
   /api/v1/database/:
     get:
-      operationId: api_v1_database_list
+      operationId: 07_conexao_banco_list
+      description: |-
+        Retorna a configuração de conexão com o banco de dados da empresa matriz do usuário autenticado.
+
+        ### Regras de negócio:
+        - Apenas a **empresa matriz** do usuário pode ter configuração de banco
+        - Retorna apenas **uma conexão** (a primeira encontrada)
+        - Campos sensíveis como senha são descriptografados automaticamente
+        - Se nenhuma conexão for encontrada, retorna lista vazia
+      summary: 07 Listar conexão de banco
       tags:
-      - api
+      - Empresa
       security:
       - jwtAuth: []
       responses:
@@ -311,16 +622,54 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ConexaoBancoModel'
+              examples:
+                ExemploDeResposta:
+                  value:
+                  - id: 1
+                    empresa: 1
+                    host: localhost
+                    porta: 5432
+                    usuario: meu_usuario
+                    database: meu_banco
+                    senha: '********'
+                  summary: Exemplo de resposta
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Empresa matriz ativa não encontrada
           description: ''
     post:
-      operationId: api_v1_database_create
+      operationId: 08_conexao_banco_create
+      description: |-
+        Cria uma nova configuração de conexão com banco de dados para a empresa matriz do usuário.
+
+        ### Regras de negócio:
+        - O usuário deve ter uma **empresa matriz ativa**
+        - Apenas **uma conexão por empresa matriz** é permitida
+        - O campo **criar_banco** só será considerado se:
+          - O administrador do sistema tiver liberado a permissão no `EmpresaSistema`
+          - Caso contrário, o valor será ignorado e tratado como `False`
+        - Campos sensíveis como senha são **criptografados** automaticamente antes do armazenamento
+      summary: 08 Criar conexão de banco
       tags:
-      - api
+      - Empresa
       requestBody:
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ConexaoBancoModelRequest'
+            examples:
+              ExemploDeRequisição:
+                value:
+                  host: meu-servidor.com
+                  porta: 5432
+                  usuario: usuario_banco
+                  database: nome_banco
+                  senha: senha_segura
+                  criar_banco: true
+                summary: Exemplo de requisição
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/ConexaoBancoModelRequest'
@@ -336,6 +685,618 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConexaoBancoModel'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erro de validação ou empresa matriz não encontrada
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Permissão para criar banco não concedida pelo administrador
+          description: ''
+  /api/v1/funcionarios/:
+    get:
+      operationId: 09_funcionario_list
+      description: |-
+        Retorna todos os funcionários ativos das empresas vinculadas ao usuário autenticado.
+
+        ### Regras de negócio:
+        - Lista apenas funcionários
+        - Mostra apenas funcionários das empresas onde o usuário tem acesso
+        - Se o limite for excedido, novas criações serão bloqueadas
+      summary: 09 Listar funcionários
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFuncionarioListList'
+              examples:
+                ExemploDeResposta:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - - id: 1
+                        nome: João Silva
+                        email: joao@empresa.com
+                        empresa:
+                          id: 1
+                          razao_social: Empresa XYZ LTDA
+                        cargo: Analista
+                        status: '1'
+                        user: 123
+                  summary: Exemplo de resposta
+          description: ''
+    post:
+      operationId: 10_funcionario_create
+      description: |
+        Cria um novo funcionário vinculado a uma empresa do usuário autenticado.
+
+        ### Regras de negócio:
+        - A empresa deve pertencer ao usuário autenticado
+        - **Limite de funcionários** de acordo com o contrato`
+        - Se `limite de funcionários` for excedido, retorna erro 400
+        - O email do funcionário deve ser único no sistema
+      summary: 10 Criar funcionário
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRequest'
+            examples:
+              ExemploDeRequisição:
+                value:
+                  nome: Maria Santos
+                  email: maria@empresa.com
+                  empresa: 1
+                  cargo: Desenvolvedor
+                  telefone: (11) 99999-9999
+                summary: Exemplo de requisição
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FuncionarioList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erro de validação ou limite excedido
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Permissão negada para a empresa
+          description: ''
+  /api/v1/funcionario/{id}/:
+    get:
+      operationId: 11_funcionario_detail
+      description: |-
+        Retorna os dados completos de um funcionário específico.
+
+        ### Regras de negócio:
+        - O funcionário deve pertencer a uma empresa do usuário autenticado
+        - Apenas funcionários com **status='1' (ativo)** são retornados
+        - Inclui dados do usuário vinculado no sistema
+      summary: 11 Detalhar funcionário
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FuncionarioList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Funcionário não encontrado
+          description: ''
+    put:
+      operationId: 12_funcionario_update_put
+      description: |-
+        Atualiza **todos os campos** de um funcionário.
+
+        ### Regras de negócio:
+        - O funcionário deve pertencer a uma empresa do usuário autenticado
+        - Atualiza também o usuário vinculado no sistema
+        - O email deve permanecer único no sistema
+        - Não é possível alterar o status por esta operação (use DELETE para desativar)
+      summary: 12 Atualizar funcionário (PUT)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Funcionario'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erro de validação
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Funcionário não encontrado
+          description: ''
+    patch:
+      operationId: 13_funcionario_update_patch
+      description: |-
+        Atualiza **parcialmente** os campos de um funcionário.
+
+        ### Regras de negócio:
+        - O funcionário deve pertencer a uma empresa do usuário autenticado
+        - Atualiza também o usuário vinculado no sistema
+        - O email deve permanecer único no sistema
+        - Não é possível alterar o status por esta operação (use DELETE para desativar)
+      summary: 13 Atualizar funcionário (PATCH)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFuncionarioRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFuncionarioRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFuncionarioRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Funcionario'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erro de validação
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Funcionário não encontrado
+          description: ''
+    delete:
+      operationId: 14_funcionario_delete
+      description: |-
+        Realiza **soft delete** (desativação) de um funcionário.
+
+        ### Regras de negócio:
+        - Altera o status do funcionário para '2' (inativo)
+        - Se o usuário **não estiver vinculado a outras empresas ativas**, desativa também a conta de usuário
+        - Se o usuário **estiver vinculado a outras empresas**, mantém a conta ativa
+        - **Não remove fisicamente** os dados do banco
+        - O funcionário não aparecerá mais nas listagens
+      summary: 14 Desativar funcionário
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Funcionário desativado com sucesso
+              examples:
+                ExemploDeResposta:
+                  value:
+                    message: Funcionário desativado com sucesso.
+                  summary: Exemplo de resposta
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Funcionário não encontrado
+          description: ''
+  /api/v1/funcionarios/rotas/:
+    get:
+      operationId: 15_funcionario_rotas_list
+      description: |-
+        Retorna todas as **rotas permitidas** vinculadas aos funcionários das empresas que pertencem ao usuário autenticado.
+
+        ### Regras de negócio:
+        - Somente **usuários independentes** ou **administradores** têm acesso.
+        - Cada registro vincula um funcionário a um grupo de rotas (`GrupoRotaSistema`).
+        - O campo `status` indica se o acesso está **ativo ('1')** ou **inativo ('2')**.
+      summary: 15 Listar rotas permitidas por funcionário
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFuncionarioRotaModelList'
+              examples:
+                ExemploDeResposta:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - - id: 1
+                        funcionario:
+                          id: 5
+                          user: 12
+                          empresa:
+                            id: 3
+                            razao_social: Tech Solutions LTDA
+                          role: admin
+                          status: '1'
+                        rota:
+                          id: 2
+                          nome: Módulo Fiscal
+                          descricao: Acesso ao módulo de NF-e
+                          sistema:
+                            id: 1
+                            nome: ERP Fiscal
+                        status: Ativo
+                        criado_em: '2025-10-06T10:30:00Z'
+                        atualizado_em: '2025-10-06T10:31:00Z'
+                  summary: Exemplo de resposta
+          description: ''
+    post:
+      operationId: 16_funcionario_rota_create
+      description: |-
+        Cria uma nova permissão de rota para um funcionário específico.
+
+        ### Regras de negócio:
+        - Apenas **usuários independentes** ou **administradores** podem criar.
+        - A combinação `(funcionario, rota)` deve ser **única**.
+        - O campo `status` deve ser `'1'` (Ativo) ou `'2'` (Inativo).
+        - Caso a rota já esteja cadastrada para o funcionário, retorna erro 400.
+      summary: 16 Criar rota permitida para funcionário
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRotaModelRequest'
+            examples:
+              ExemploDeRequisição:
+                value:
+                  funcionario: 5
+                  rota: 2
+                  status: '1'
+                summary: Exemplo de requisição
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRotaModelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRotaModelRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FuncionarioRotaModel'
+              examples:
+                ExemploDeResposta:
+                  value:
+                    id: 10
+                    funcionario:
+                      id: 5
+                      user: 12
+                      empresa:
+                        id: 3
+                        razao_social: Tech Solutions LTDA
+                      role: admin
+                      status: '1'
+                    rota:
+                      id: 2
+                      nome: Módulo Fiscal
+                      descricao: Acesso ao módulo de NF-e
+                      sistema:
+                        id: 1
+                        nome: ERP Fiscal
+                    status: Ativo
+                    criado_em: '2025-10-06T10:30:00Z'
+                    atualizado_em: '2025-10-06T10:31:00Z'
+                  summary: Exemplo de resposta
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erro de validação ou rota já cadastrada
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Permissão negada
+          description: ''
+  /api/v1/funcionario/rota/{id}/:
+    get:
+      operationId: 17_funcionario_rota_detail
+      description: |-
+        Retorna os detalhes de uma rota permitida específica.
+
+        ### Regras de negócio:
+        - Apenas **usuários independentes** ou **administradores** têm acesso.
+        - O registro deve existir e estar vinculado a um funcionário ativo.
+      summary: 17 Detalhar rota permitida de funcionário
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FuncionarioRotaModel'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Rota permitida não encontrada
+          description: ''
+    put:
+      operationId: 18_funcionario_rota_update_put
+      description: |-
+        Atualiza todos os campos de uma permissão de rota de funcionário.
+
+        ### Regras de negócio:
+        - Apenas **usuários independentes** ou **administradores** podem atualizar.
+        - A combinação `(funcionario, rota)` deve continuar única.
+        - Não é possível alterar `funcionario` e `rota` para um par já existente.
+      summary: 18 Atualizar rota permitida (PUT)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRotaModelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRotaModelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FuncionarioRotaModelRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FuncionarioRotaModel'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erro de validação ou duplicidade
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Rota permitida não encontrada
+          description: ''
+    patch:
+      operationId: 19_funcionario_rota_update_patch
+      description: |-
+        Atualiza parcialmente os campos de uma permissão de rota de funcionário.
+
+        ### Regras de negócio:
+        - Apenas **usuários independentes** ou **administradores** podem atualizar.
+        - O par `(funcionario, rota)` deve permanecer único.
+        - O campo `status` pode ser alterado para ativar/inativar o acesso.
+      summary: 19 Atualizar rota permitida (PATCH)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFuncionarioRotaModelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFuncionarioRotaModelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFuncionarioRotaModelRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FuncionarioRotaModel'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erro de validação
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Rota permitida não encontrada
+          description: ''
+    delete:
+      operationId: 20_funcionario_rota_delete
+      description: |-
+        Remove uma permissão de rota de funcionário.
+
+        ### Regras de negócio:
+        - Apenas **usuários independentes** ou **administradores** podem excluir.
+        - A exclusão é **definitiva** (remoção física).
+        - Caso o registro não exista, retorna 404.
+      summary: 20 Remover rota permitida
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresa
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Permissão de rota removida com sucesso
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Rota permitida não encontrada
+          description: ''
+  /api/v1/sistemas/rotas/:
+    get:
+      operationId: 01_listar_categorias_2
+      description: Retorna a lista de categorias e subcategorias de empresas.
+      summary: 01 Listar todas as categorias de empresas
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Rotas disponiveis
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRotaSistemaModelList'
           description: ''
 components:
   schemas:
@@ -659,6 +1620,118 @@ components:
         matriz_filial:
           type: integer
           nullable: true
+    Funcionario:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - role
+      - status
+    FuncionarioList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        empresa_nome:
+          type: string
+          readOnly: true
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        status:
+          type: string
+          readOnly: true
+      required:
+      - email
+      - empresa_nome
+      - id
+      - role
+      - status
+      - username
+    FuncionarioRequest:
+      type: object
+      properties:
+        empresa_id:
+          type: integer
+          writeOnly: true
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        email:
+          type: string
+          format: email
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - email
+      - empresa_id
+      - password
+      - role
+      - status
+      - username
+    FuncionarioRotaModel:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        funcionario:
+          type: integer
+        rota:
+          type: integer
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        criado_em:
+          type: string
+          format: date-time
+          readOnly: true
+        atualizado_em:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - atualizado_em
+      - criado_em
+      - funcionario
+      - id
+      - rota
+      - status
+      - status_display
+    FuncionarioRotaModelRequest:
+      type: object
+      properties:
+        funcionario:
+          type: integer
+        rota:
+          type: integer
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - funcionario
+      - rota
+      - status
     PaginatedCategoriaEmpresaModelList:
       type: object
       required:
@@ -705,6 +1778,75 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EmpresaList'
+    PaginatedFuncionarioListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FuncionarioList'
+    PaginatedFuncionarioRotaModelList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FuncionarioRotaModel'
+    PaginatedRotaSistemaModelList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RotaSistemaModel'
     PatchedEmpresaUpdateRequest:
       type: object
       description: Serializer específico para atualização
@@ -740,6 +1882,75 @@ components:
         matriz_filial:
           type: integer
           nullable: true
+    PatchedFuncionarioRequest:
+      type: object
+      properties:
+        empresa_id:
+          type: integer
+          writeOnly: true
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        email:
+          type: string
+          format: email
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+    PatchedFuncionarioRotaModelRequest:
+      type: object
+      properties:
+        funcionario:
+          type: integer
+        rota:
+          type: integer
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+    RoleEnum:
+      enum:
+      - admin
+      - funcionario
+      type: string
+      description: |-
+        * `admin` - Administrador
+        * `funcionario` - Funcionário
+    RotaSistemaModel:
+      type: object
+      description: |-
+        Serializer para o modelo RotaSistema.
+
+        Utilizado para operações CRUD básicas do cadastro de rotas dos sistemas.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 100
+        path:
+          type: string
+          maxLength: 200
+        metodo:
+          type: string
+          maxLength: 10
+        descricao:
+          type: string
+          nullable: true
+        sistema:
+          type: integer
+      required:
+      - id
+      - nome
+      - path
+      - sistema
     StatusEnum:
       enum:
       - '1'

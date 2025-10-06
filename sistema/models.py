@@ -17,6 +17,8 @@ class Sistema(models.Model):
 class EmpresaSistema(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="sistemas")
     sistema = models.ForeignKey(Sistema, on_delete=models.CASCADE, related_name="empresas")
+    max_funcionarios_registros = models.IntegerField(null=True, blank=True, default=1)
+    criar_banco = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
 
     class Meta:

@@ -12,9 +12,9 @@ urlpatterns = [
     path('api/v1/', include('authentication.urls')),
 
     # Sistema, Acesso e Notificações rotas e modulos
+    path('api/v1/', include('sistema.urls')),
     path('api/v1/', include('empresa.urls')),
     path('api/v1/', include('notifications.urls')),
-    path('api/v1/', include('sistema.urls')),
 
     # Allnube rotas e modulos
     path('api/v1/', include('nfe.urls')),
@@ -25,8 +25,8 @@ urlpatterns = [
     # YOUR PATTERNS
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Optional UI:
-    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    # path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/v1/documentacao', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),  # redoc
 ]
 
 # + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

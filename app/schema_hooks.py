@@ -1,10 +1,55 @@
 def remove_specific_paths(endpoints, **kwargs):
+    """
+    Inclui apenas views específicas que queremos documentar.
+    """
+    allowed_views = {
+        # Autenticação
+        'CustomTokenObtainPairView',
+        'CustomTokenRefreshView',
+        'CustomTokenVerifyView',
+        'UserProfileCreateView',
+        'PasswordResetRequestAPIView',
+        'PasswordResetConfirmAPIView',
+
+        # Autenticaçao Perfil
+        'UserProfileView',
+        'UserUpdateProfile',
+
+        # Rotas disponiveis de acordo com o sistema
+        'RotaSistemaListCreateAPIView',
+
+        # Categoria das empresas
+        'CategoriaEmpresaListCreateAPIView',
+
+        # Cadastro empresa
+        'EmpresaListCreateAPIView',
+        'EmpresaRetrieveUpdateDestroyAPIView',
+
+        # Cadastro empresa conexão
+        'ConexaoBancoListCreateAPIView',
+
+        # Cadastro empresa funcionarios
+        'FuncionarioListCreateAPIView',
+        'FuncionarioRetrieveUpdateDestroyAPIView',
+
+        # Cadastro empresa permissão de navegação
+        'FuncionarioRotasListCreateAPIView',
+        'FuncionarioRotasRetrieveUpdateDestroyAPIView',
+
+        # Cadastrar grupo de rotas de acesso a funcionarios
+        'GrupoRotaSistemaListCreateAPIView',
+        'GrupoRotaSistemaRetrieveUpdateDestroyAPIView',
+    }
+
     filtered_endpoints = []
 
     for path, path_regex, method, callback in endpoints:
-        view_module = callback.__module__
 
-        if view_module.startswith('authentication.views') or view_module.startswith('empresa.views'):
-            filtered_endpoints.append((path, path_regex, method, callback))
+        # Verifica se é uma view que queremos documentar
+        view_name = getattr(callback, 'cls').__name__ if hasattr(callback, 'cls') else None
+        if view_name not in allowed_views:
+            continue
+
+        filtered_endpoints.append((path, path_regex, method, callback))
 
     return filtered_endpoints

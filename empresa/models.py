@@ -3,9 +3,6 @@ from django.db import models
 
 from django.conf import settings
 from cryptography.fernet import Fernet
-import base64
-import os
-
 
 ESTADOS_CHOICES = (
     ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
@@ -65,6 +62,11 @@ class Empresa(models.Model):
 
     def __str__(self):
         return self.razao_social
+
+    def save(self, *args, **kwargs):
+        # Quando a empresa é criada, o usuário é automaticamente associado como admin
+        super().save(*args, **kwargs)
+        Funcionario.objects.create(user=self.usuario, empresa=self, role=Funcionario.ADMIN)
 
 
 class HistoricoNSU(models.Model):
@@ -180,3 +182,34 @@ class ConexaoBanco(models.Model):
     @password.setter
     def password(self, value):
         self.set_senha(value)
+
+
+class Funcionario(models.Model):
+    ADMIN = 'admin'
+    FUNCIONARIO = 'funcionario'
+
+    ROLE_CHOICES = [
+        (ADMIN, 'Administrador'),
+        (FUNCIONARIO, 'Funcionário'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    role = models.CharField(max_length=15, choices=ROLE_CHOICES)
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.user.username} - {self.role} em {self.empresa.razao_social}'
+
+
+class RotasPermitidas(models.Model):
+    funcionario = models.ForeignKey('Funcionario', on_delete=models.CASCADE, related_name='rotas_permitidas')
+    rota = models.ForeignKey('sistema.GrupoRotaSistema', on_delete=models.CASCADE, related_name='rotas_permitidas')
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.funcionario.user.username} - {self.rota.nome}'

@@ -21,7 +21,8 @@ API_URL = os.getenv('API_URL')
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-a_h_jcaxpm1+pu&1kq31z9xp_i=s-39#t!crujpuozhm9@(i++')
+SECRET_KEY = os.getenv('SECRET_KEY', None)
+FERNET_SECRET_KEY = os.getenv('FERNET_SECRET_KEY', None)
 
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 SANDBOX_NFE = os.getenv('SANDBOX_NFE', 'False')
@@ -266,8 +267,8 @@ APP_VERSION = '1.0.0'
 MAX_FILE_UPLOAD_SIZE = 104857600  # 100MB
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Your Project API',
-    'DESCRIPTION': 'Your project description',
+    'TITLE': 'Azevedo sistemas',
+    'DESCRIPTION': 'Documentação dos sistemas da azevedo',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 
@@ -275,7 +276,7 @@ SPECTACULAR_SETTINGS = {
     # PREPROCESSING_HOOKS, certifique-se de desabilitar esta configuração. Se configurado, a classificação
     # é aplicada após o PREPROCESSING_HOOKS. Aceita
     # True (alpha-sorter do drf-spectacular), False ou um valor invocável para o argumento-chave de classificação.
-    'SORT_OPERATIONS': False,  # Não ordenar automaticamente
+    'SORT_OPERATIONS': False,  # Ordenar automaticamente
 
     # Determina se os parâmetros da operação devem ser classificados alfanumericamente ou apenas
     # na ordem em que chegaram. Aceita Verdadeiro, Falso ou um valor invocável para o argumento-chave da classificação.

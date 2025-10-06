@@ -1,3 +1,10 @@
+"""
+    Execute isso em uma migration customizada ou shell do Django
+    
+    python manage.py shell
+    >>> from empresa.utils.popular_categorias import popular_categorias
+    >>> popular_categorias()
+"""
 from empresa.models import CategoriaEmpresa
 
 
@@ -185,8 +192,3 @@ def popular_categorias():
             if not subcategoria.descricao or subcategoria.descricao != descricao_sub:
                 subcategoria.descricao = descricao_sub
                 subcategoria.save()
-
-# Execute isso em uma migration customizada ou shell do Django
-# python manage.py shell
-# >>> from empresa.utils.popular_categorias import popular_categorias
-# >>> popular_categorias()

@@ -127,7 +127,7 @@ class EmpresaSistemaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EmpresaSistema
-        fields = ['id', 'sistema', 'sistema_nome', 'empresa', 'empresa_nome', 'ativo']
+        fields = ['id', 'sistema', 'sistema_nome', 'empresa', 'empresa_nome', 'ativo', 'max_funcionarios_registros', 'criar_banco']
         read_only_fields = ['id', 'sistema_nome', 'empresa', 'empresa_nome']
 
     def validate(self, attrs):
