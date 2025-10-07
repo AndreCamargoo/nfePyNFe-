@@ -456,8 +456,6 @@ class FuncionarioListCreateAPIView(generics.ListCreateAPIView):
             "- Altera o status do funcionário para '2' (inativo)\n"
             "- Se o usuário **não estiver vinculado a outras empresas ativas**, desativa também a conta de usuário\n"
             "- Se o usuário **estiver vinculado a outras empresas**, mantém a conta ativa\n"
-            "- **Não remove fisicamente** os dados do banco\n"
-            "- O funcionário não aparecerá mais nas listagens"
         ),
         responses={
             200: {"description": "Funcionário desativado com sucesso"},
