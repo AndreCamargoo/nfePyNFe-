@@ -227,9 +227,8 @@ class CategoriaEmpresaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestro
             "### Regras de negócio:\n"
             "- O usuário deve ter uma **empresa matriz ativa**\n"
             "- Apenas **uma conexão por empresa matriz** é permitida\n"
-            "- O campo **criar_banco** só será considerado se:\n"
-            "  - O administrador do sistema tiver liberado a permissão no `EmpresaSistema`\n"
-            "  - Caso contrário, o valor será ignorado e tratado como `False`\n"
+            "- O campo **criar banco** só será considerado se:\n"
+            "  - O administrador do sistema tiver liberado a permissão\n"
             "- Campos sensíveis como senha são **criptografados** automaticamente antes do armazenamento"
         ),
         request=ConexaoBancoModelSerializer,
