@@ -167,8 +167,8 @@ class RotaSistemaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
 @extend_schema_view(
     get=extend_schema(
         tags=["Grupos de Permissões"],
-        operation_id="listar_grupos_permissoes",
-        summary="Listar grupos de permissões da empresa",
+        operation_id="01_listar_grupos_permissoes",
+        summary="01 Listar grupos de permissões da empresa",
         description=(
             "Retorna todos os grupos de permissões criados pela empresa para gerenciar acesso de funcionários.\n\n"
             "### Funcionalidades:\n"
@@ -254,8 +254,8 @@ class RotaSistemaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
     ),
     post=extend_schema(
         tags=["Grupos de Permissões"],
-        operation_id="criar_grupo_permissoes",
-        summary="Criar novo grupo de permissões",
+        operation_id="02_criar_grupo_permissoes",
+        summary="02 Criar novo grupo de permissões",
         description=(
             "Cria um novo grupo de permissões para definir quais rotas os funcionários podem acessar.\n\n"
             "### Fluxo de Configuração:\n"
@@ -383,8 +383,8 @@ class GrupoRotaSistemaListCreateAPIView(generics.ListCreateAPIView):
 @extend_schema_view(
     get=extend_schema(
         tags=["Grupos de Permissões"],
-        operation_id="visualizar_grupo_permissoes",
-        summary="Visualizar detalhes do grupo de permissões",
+        operation_id="03_visualizar_grupo_permissoes",
+        summary="03 Visualizar detalhes do grupo de permissões",
         description=(
             "Retorna os detalhes completos de um grupo de permissões específico.\n"
             "### Utilização:\n"
@@ -446,8 +446,8 @@ class GrupoRotaSistemaListCreateAPIView(generics.ListCreateAPIView):
     ),
     put=extend_schema(
         tags=["Grupos de Permissões"],
-        operation_id="atualizar_grupo_permissoes",
-        summary="Atualizar grupo de permissões",
+        operation_id="04_atualizar_grupo_permissoes",
+        summary="04 Atualizar grupo de permissões",
         description=(
             "Atualiza completamente as permissões de um grupo existente.\n"
             "### Cenários de Uso:\n"
@@ -483,8 +483,8 @@ class GrupoRotaSistemaListCreateAPIView(generics.ListCreateAPIView):
     ),
     patch=extend_schema(
         tags=["Grupos de Permissões"],
-        operation_id="atualizar_parcial_grupo_permissoes",
-        summary="Atualização parcial do grupo",
+        operation_id="05_atualizar_parcial_grupo_permissoes",
+        summary="05 Atualização parcial do grupo",
         description=(
             "Atualiza apenas campos específicos do grupo de permissões.\n"
             "### Casos de Uso:\n"
@@ -526,8 +526,8 @@ class GrupoRotaSistemaListCreateAPIView(generics.ListCreateAPIView):
     ),
     delete=extend_schema(
         tags=["Grupos de Permissões"],
-        operation_id="excluir_grupo_permissoes",
-        summary="Excluir grupo de permissões",
+        operation_id="06_excluir_grupo_permissoes",
+        summary="06 Excluir grupo de permissões",
         description=(
             "Remove permanentemente um grupo de permissões do sistema.\n\n"
             "### Verificações de Segurança:\n"

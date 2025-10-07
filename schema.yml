@@ -365,6 +365,564 @@ paths:
           description: Dados inválidos
         '403':
           description: Permissão negada
+  /api/v1/sistemas/rotas/:
+    get:
+      operationId: 01_listar_rotas_por_sistema
+      description: |-
+        Retorna todas as rotas e endpoints disponíveis para um sistema específico.
+
+        ### Funcionalidades:
+        - Lista filtrada de rotas API por sistema
+        - Informações sobre módulos e endpoints associados
+        - Metadados para configuração de controle de acesso
+        - Base para atribuição de permissões a funcionários
+
+        ### Parâmetros:
+        - **sistema_id** (obrigatório): ID do sistema para filtrar as rotas
+
+        ### Permissões:
+        - **GET**: Apenas a **empresa matriz** pode visualizar as rotas do sistema
+        ### Utilização:
+        Esta lista é utilizada para definir quais rotas de um sistema específico cada funcionário pode acessar através do sistema de permissões hierárquicas.
+      summary: 01 Listar rotas disponíveis por sistema
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: sistema_id
+        schema:
+          type: integer
+        description: ID do sistema para filtrar as rotas
+        required: true
+      tags:
+      - Rotas do Sistema
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRotaSistemaModelList'
+              examples:
+                ExemploDeResposta:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - - id: 1
+                        nome: Módulo Fiscal - Consulta
+                        descricao: Endpoint para consulta de documentos fiscais
+                        path: /api/fiscal/consultar/
+                        metodo: GET
+                        sistema:
+                          id: 1
+                          nome: ERP Fiscal
+                      - id: 2
+                        nome: Módulo Fiscal - Importação
+                        descricao: Endpoint para importação de notas fiscais
+                        path: /api/fiscal/emitir/
+                        metodo: POST
+                        sistema:
+                          id: 1
+                          nome: ERP Fiscal
+                  summary: Exemplo de resposta
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Parâmetro sistema_id não informado ou inválido
+          description: ''
+  /api/v1/sistemas/grupos-rotas/:
+    get:
+      operationId: 01_listar_grupos_permissoes
+      description: "Retorna todos os grupos de permissões criados pela empresa para\
+        \ gerenciar acesso de funcionários.\n\n### Funcionalidades:\n- Lista de grupos\
+        \ de permissões personalizados da empresa\n- Visualização das rotas e endpoints\
+        \ associados a cada grupo\n- Base para atribuição de permissões a funcionários\n\
+        - Controle granular de acesso por módulos do sistema\n\n### Caso de Uso:\n\
+        A empresa cria grupos como 'Administrador', 'Financeiro', 'Operacional' com\
+        \ diferentes conjuntos \nde permissões, depois associa esses grupos aos funcionários\
+        \ conforme suas funções.\n\n### Exemplos Práticos:\n- **Grupo Administrador**:\
+        \ Todas as rotas do sistema\n- **Grupo Financeiro**: Apenas módulos financeiros\
+        \ e relatórios\n- **Grupo Vendas**: Módulos de pedidos, clientes e CRM\n-\
+        \ **Grupo Consulta**: Apenas visualização de dados\n\n### Permissões:\n- Apenas\
+        \ usuários autenticados da empresa matriz\n- Administradores da empresa"
+      summary: 01 Listar grupos de permissões da empresa
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Grupos de Permissões
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGrupoRotaSistemaListList'
+              examples:
+                ExemploDeResposta-GruposDaEmpresa:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - - id: 1
+                        nome: Administradores
+                        descricao: Acesso total a todos os módulos do sistema
+                        sistema:
+                          id: 1
+                          nome: ERP Corporativo
+                        rotas:
+                        - id: 1
+                          nome: Gestão de Usuários
+                          path: /api/usuarios/
+                          metodo: GET,POST,PUT,DELETE
+                          descricao: Gerenciamento completo de usuários
+                        - id: 2
+                          nome: Relatórios Financeiros
+                          path: /api/financeiro/relatorios/
+                          metodo: GET,POST
+                          descricao: Geração e visualização de relatórios
+                      - id: 2
+                        nome: Equipe Financeira
+                        descricao: Acesso aos módulos financeiros e contábeis
+                        sistema:
+                          id: 1
+                          nome: ERP Corporativo
+                        rotas:
+                        - id: 2
+                          nome: Relatórios Financeiros
+                          path: /api/financeiro/relatorios/
+                          metodo: GET,POST
+                          descricao: Geração e visualização de relatórios
+                        - id: 3
+                          nome: Contas a Pagar/Receber
+                          path: /api/financeiro/contas/
+                          metodo: GET,POST,PUT
+                          descricao: Gestão de contas financeiras
+                  summary: Exemplo de resposta - Grupos da empresa
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Credenciais de autenticação não fornecidas
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Acesso restrito à empresa matriz
+          description: ''
+    post:
+      operationId: 02_criar_grupo_permissoes
+      description: |-
+        Cria um novo grupo de permissões para definir quais rotas os funcionários podem acessar.
+
+        ### Fluxo de Configuração:
+        1. Empresa cria um grupo (ex: 'Coordenadores')
+        2. Seleciona as rotas que esse grupo pode acessar
+        3. Associa funcionários a este grupo
+        4. Funcionários herdam as permissões do grupo
+
+        ### Casos de Uso Comuns:
+        ```json
+        {
+          "nome": "Supervisores",
+          "descricao": "Acesso a gestão de equipe e relatórios",
+          "sistema": 1,
+          "rotas": [10, 15, 20, 25]
+        }
+        ```
+
+        ### Validações:
+        - Nome deve ser único por empresa
+        - Rotas devem pertencer ao sistema selecionado
+        - Sistema deve estar ativo para a empresa
+
+        ### Permissões:
+        - Apenas administradores da empresa matriz
+      summary: 02 Criar novo grupo de permissões
+      tags:
+      - Grupos de Permissões
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrupoRotaSistemaCreateRequest'
+            examples:
+              Exemplo1-GrupoAdministrativo:
+                value:
+                  nome: Administradores
+                  descricao: Acesso completo a todas as funcionalidades
+                  sistema: 1
+                  rotas:
+                  - 1
+                  - 2
+                  - 3
+                  - 4
+                  - 5
+                  - 6
+                  - 7
+                  - 8
+                  - 9
+                  - 10
+                summary: Exemplo 1 - Grupo Administrativo
+                description: Grupo com acesso total ao sistema
+              Exemplo2-GrupoOperacional:
+                value:
+                  nome: Equipe Operacional
+                  descricao: Acesso às funcionalidades do dia a dia
+                  sistema: 1
+                  rotas:
+                  - 3
+                  - 4
+                  - 7
+                  - 8
+                summary: Exemplo 2 - Grupo Operacional
+                description: Grupo com acesso limitado às operações rotineiras
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GrupoRotaSistemaCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GrupoRotaSistemaCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrupoRotaSistemaList'
+              examples:
+                ExemploDeResposta-GrupoCriado:
+                  value:
+                    id: 3
+                    nome: Equipe Financeira
+                    descricao: Acesso aos módulos financeiros
+                    sistema:
+                      id: 1
+                      nome: ERP Corporativo
+                    rotas:
+                    - id: 2
+                      nome: Relatórios Financeiros
+                      path: /api/financeiro/relatorios/
+                      metodo: GET,POST
+                      descricao: Geração de relatórios financeiros
+                    - id: 5
+                      nome: Conciliação Bancária
+                      path: /api/financeiro/conciliacao/
+                      metodo: GET,POST,PUT
+                      descricao: Conciliação de extratos bancários
+                  summary: Exemplo de resposta - Grupo criado
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Erros de validação
+                examples:
+                  rotas_sistema_invalido:
+                    value:
+                      error: Algumas rotas não pertencem ao sistema selecionado
+                  nome_duplicado:
+                    value:
+                      nome: Já existe um grupo com este nome
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Credenciais de autenticação não fornecidas
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Apenas administradores podem criar grupos
+          description: ''
+  /api/v1/sistema/grupo-rota/{id}/:
+    get:
+      operationId: 03_visualizar_grupo_permissoes
+      description: |-
+        Retorna os detalhes completos de um grupo de permissões específico.
+        ### Utilização:
+        - Verificar quais permissões um grupo possui
+        - Validar configurações antes de associar funcionários
+        - Auditoria de acessos concedidos
+        ### Informações Incluídas:
+        - Lista completa de rotas permitidas
+        - Metadados do sistema
+        - Descrição e finalidade do grupo
+        ### Permissões:
+        - Apenas administradores da empresa dona do grupo
+      summary: 03 Visualizar detalhes do grupo de permissões
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Grupos de Permissões
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrupoRotaSistemaList'
+              examples:
+                Exemplo-GrupoDeCoordenadores:
+                  value:
+                    id: 4
+                    nome: Coordenadores
+                    descricao: Acesso a gestão de equipes e indicadores
+                    sistema:
+                      id: 1
+                      nome: ERP Corporativo
+                    rotas:
+                    - id: 6
+                      nome: Gestão de Equipe
+                      path: /api/rh/equipe/
+                      metodo: GET,POST,PUT
+                      descricao: Gerenciamento de membros da equipe
+                    - id: 7
+                      nome: Indicadores de Performance
+                      path: /api/indicadores/
+                      metodo: GET
+                      descricao: Visualização de KPIs e métricas
+                    - id: 8
+                      nome: Relatórios Gerenciais
+                      path: /api/relatorios/gerenciais/
+                      metodo: GET,POST
+                      descricao: Relatórios para tomada de decisão
+                    usuario: 1
+                  summary: Exemplo - Grupo de Coordenadores
+                  description: Exemplo de grupo para coordenadores com acesso a gestão
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Grupo não encontrado ou não pertence à empresa
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Acesso permitido apenas à empresa proprietária
+          description: ''
+    put:
+      operationId: 04_atualizar_grupo_permissoes
+      description: |-
+        Atualiza completamente as permissões de um grupo existente.
+        ### Cenários de Uso:
+        - Adicionar novas rotas a um grupo existente
+        - Remover permissões não mais necessárias
+        - Corrigir configurações de acesso
+        - Expandir/restringir permissões do grupo
+        ### Impacto:
+        - Todas as alterações afetam imediatamente os funcionários associados
+        - Recomendado comunicar mudanças aos usuários afetados
+        ### Permissões:
+        - Apenas administradores da empresa proprietária
+      summary: 04 Atualizar grupo de permissões
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Grupos de Permissões
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrupoRotaSistemaCreateRequest'
+            examples:
+              Exemplo-AdicionarPermissõesFinanceiras:
+                value:
+                  nome: Coordenadores Expandido
+                  descricao: Acesso ampliado para incluir módulo financeiro
+                  sistema: 1
+                  rotas:
+                  - 6
+                  - 7
+                  - 8
+                  - 2
+                  - 5
+                summary: Exemplo - Adicionar permissões financeiras
+                description: Expansão de permissões para incluir módulo financeiro
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GrupoRotaSistemaCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GrupoRotaSistemaCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrupoRotaSistemaList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Dados inválidos ou rotas incompatíveis
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Grupo não encontrado
+          description: ''
+    patch:
+      operationId: 05_atualizar_parcial_grupo_permissoes
+      description: |-
+        Atualiza apenas campos específicos do grupo de permissões.
+        ### Casos de Uso:
+        - Renomear grupo sem alterar permissões
+        - Atualizar descrição do grupo
+        - Adicionar/remover rotas específicas
+        - Corrigir pequenos ajustes
+        ### Vantagens:
+        - Não precisa enviar todos os dados
+        - Menor risco de erro
+        - Mais eficiente para pequenas mudanças
+        ### Permissões:
+        - Apenas administradores da empresa proprietária
+      summary: 05 Atualização parcial do grupo
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Grupos de Permissões
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGrupoRotaSistemaCreateRequest'
+            examples:
+              Exemplo1-ApenasRenomear:
+                value:
+                  nome: Líderes de Equipe
+                summary: Exemplo 1 - Apenas renomear
+                description: Apenas alterando o nome do grupo
+              Exemplo2-AdicionarRotas:
+                value:
+                  rotas:
+                  - 6
+                  - 7
+                  - 8
+                  - 9
+                summary: Exemplo 2 - Adicionar rotas
+                description: Apenas atualizando a lista de rotas
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGrupoRotaSistemaCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGrupoRotaSistemaCreateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrupoRotaSistemaList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Dados inválidos
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Grupo não encontrado
+          description: ''
+    delete:
+      operationId: 06_excluir_grupo_permissoes
+      description: |-
+        Remove permanentemente um grupo de permissões do sistema.
+
+        ### Verificações de Segurança:
+        - Grupo não pode estar associado a funcionários ativos
+        - Backup das configurações é recomendado
+        - Operação irreversível
+
+        ### Fluxo Recomendado:
+        1. Verificar funcionários associados ao grupo
+        2. Migrar funcionários para outro grupo se necessário
+        3. Confirmar exclusão
+        4. Registrar a ação no log do sistema
+
+        ### Permissões:
+        - Apenas administradores da empresa proprietária
+        - Grupo não pode ter funcionários associados
+      summary: 06 Excluir grupo de permissões
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Grupos de Permissões
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Grupo excluído com sucesso
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Grupo não pode ser excluído
+                examples:
+                  grupo_com_funcionarios:
+                    value:
+                      error: Não é possível excluir grupo com funcionários associados
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Grupo não encontrado
+          description: ''
   /api/v1/categorias/:
     get:
       operationId: 01_listar_categorias
@@ -1275,29 +1833,6 @@ paths:
               schema:
                 description: Rota permitida não encontrada
           description: ''
-  /api/v1/sistemas/rotas/:
-    get:
-      operationId: 01_listar_categorias_2
-      description: Retorna a lista de categorias e subcategorias de empresas.
-      summary: 01 Listar todas as categorias de empresas
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      tags:
-      - Rotas disponiveis
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedRotaSistemaModelList'
-          description: ''
 components:
   schemas:
     CategoriaEmpresaModel:
@@ -1732,6 +2267,73 @@ components:
       - funcionario
       - rota
       - status
+    GrupoRotaSistemaCreateRequest:
+      type: object
+      description: |-
+        Serializer para CREATE de GrupoRotaSistema que define automaticamente
+        o usuário baseado no token logado.
+      properties:
+        sistema:
+          type: integer
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 100
+        descricao:
+          type: string
+          nullable: true
+        rotas:
+          type: array
+          items:
+            type: integer
+      required:
+      - nome
+      - rotas
+      - sistema
+    GrupoRotaSistemaList:
+      type: object
+      description: Serializer para LIST de GrupoRotaSistema com informações detalhadas.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        usuario:
+          type: integer
+          readOnly: true
+        usuario_nome:
+          type: string
+          readOnly: true
+        sistema:
+          type: integer
+          readOnly: true
+        sistema_nome:
+          type: string
+          readOnly: true
+        nome:
+          type: string
+          readOnly: true
+        descricao:
+          type: string
+          readOnly: true
+          nullable: true
+        rotas_count:
+          type: string
+          readOnly: true
+        rotas_detalhes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RotaSistemaModel'
+          readOnly: true
+      required:
+      - descricao
+      - id
+      - nome
+      - rotas_count
+      - rotas_detalhes
+      - sistema
+      - sistema_nome
+      - usuario
+      - usuario_nome
     PaginatedCategoriaEmpresaModelList:
       type: object
       required:
@@ -1824,6 +2426,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FuncionarioRotaModel'
+    PaginatedGrupoRotaSistemaListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrupoRotaSistemaList'
     PaginatedRotaSistemaModelList:
       type: object
       required:
@@ -1914,6 +2539,25 @@ components:
           type: integer
         status:
           $ref: '#/components/schemas/StatusEnum'
+    PatchedGrupoRotaSistemaCreateRequest:
+      type: object
+      description: |-
+        Serializer para CREATE de GrupoRotaSistema que define automaticamente
+        o usuário baseado no token logado.
+      properties:
+        sistema:
+          type: integer
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 100
+        descricao:
+          type: string
+          nullable: true
+        rotas:
+          type: array
+          items:
+            type: integer
     RoleEnum:
       enum:
       - admin
