@@ -166,54 +166,84 @@ class RotaSistemaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
 
 @extend_schema_view(
     get=extend_schema(
-        tags=["Grupos de Rotas"],
-        operation_id="listar_grupos_rotas_usuario",
-        summary="Listar grupos de rotas do usuário",
+        tags=["Grupos de Permissões"],
+        operation_id="listar_grupos_permissoes",
+        summary="Listar grupos de permissões da empresa",
         description=(
-            "Retorna todos os Grupos de Rotas associados ao usuário autenticado.\n\n"
+            "Retorna todos os grupos de permissões criados pela empresa para gerenciar acesso de funcionários.\n\n"
             "### Funcionalidades:\n"
-            "- Lista personalizada dos grupos criados pelo usuário\n"
-            "- Detalhes completos das rotas associadas a cada grupo\n"
-            "- Informações do sistema vinculado a cada grupo\n"
-            "- Base para gerenciamento de permissões personalizadas\n\n"
+            "- Lista de grupos de permissões personalizados da empresa\n"
+            "- Visualização das rotas e endpoints associados a cada grupo\n"
+            "- Base para atribuição de permissões a funcionários\n"
+            "- Controle granular de acesso por módulos do sistema\n\n"
+            "### Caso de Uso:\n"
+            "A empresa cria grupos como 'Administrador', 'Financeiro', 'Operacional' com diferentes conjuntos \n"
+            "de permissões, depois associa esses grupos aos funcionários conforme suas funções.\n\n"
+            "### Exemplos Práticos:\n"
+            "- **Grupo Administrador**: Todas as rotas do sistema\n"
+            "- **Grupo Financeiro**: Apenas módulos financeiros e relatórios\n"
+            "- **Grupo Vendas**: Módulos de pedidos, clientes e CRM\n"
+            "- **Grupo Consulta**: Apenas visualização de dados\n\n"
             "### Permissões:\n"
-            "- **GET**: Usuários autenticados (independentes ou administradores)\n"
-            "- **POST**: Usuários autenticados (independentes ou administradores)\n\n"
-            "### Observações:\n"
-            "- Cada usuário só visualiza seus próprios grupos\n"
-            "- Grupos são vinculados automaticamente ao usuário na criação"
+            "- Apenas usuários autenticados da empresa matriz\n"
+            "- Administradores da empresa"
         ),
         responses={
             200: GrupoRotaSistemaListSerializer(many=True),
-            401: {"description": "Credenciais de autenticação não fornecidas ou inválidas"},
-            403: {"description": "Usuário não tem permissão para acessar este recurso"}
+            401: {"description": "Credenciais de autenticação não fornecidas"},
+            403: {"description": "Acesso restrito à empresa matriz"}
         },
         examples=[
             OpenApiExample(
-                'Exemplo de resposta - Lista de grupos',
+                'Exemplo de resposta - Grupos da empresa',
                 value=[
                     {
                         "id": 1,
-                        "nome": "Grupo Fiscal Básico",
-                        "descricao": "Grupo para operações fiscais básicas",
+                        "nome": "Administradores",
+                        "descricao": "Acesso total a todos os módulos do sistema",
                         "sistema": {
                             "id": 1,
-                            "nome": "ERP Fiscal"
+                            "nome": "ERP Corporativo"
                         },
                         "rotas": [
                             {
                                 "id": 1,
-                                "nome": "Consulta NFE",
-                                "path": "/api/nfe/consulta/",
-                                "metodo": "GET",
-                                "descricao": "Endpoint para consulta de notas fiscais"
+                                "nome": "Gestão de Usuários",
+                                "path": "/api/usuarios/",
+                                "metodo": "GET,POST,PUT,DELETE",
+                                "descricao": "Gerenciamento completo de usuários"
                             },
                             {
                                 "id": 2,
-                                "nome": "Emissão NFE",
-                                "path": "/api/nfe/emissao/",
-                                "metodo": "POST",
-                                "descricao": "Endpoint para emissão de notas fiscais"
+                                "nome": "Relatórios Financeiros",
+                                "path": "/api/financeiro/relatorios/",
+                                "metodo": "GET,POST",
+                                "descricao": "Geração e visualização de relatórios"
+                            }
+                        ]
+                    },
+                    {
+                        "id": 2,
+                        "nome": "Equipe Financeira",
+                        "descricao": "Acesso aos módulos financeiros e contábeis",
+                        "sistema": {
+                            "id": 1,
+                            "nome": "ERP Corporativo"
+                        },
+                        "rotas": [
+                            {
+                                "id": 2,
+                                "nome": "Relatórios Financeiros",
+                                "path": "/api/financeiro/relatorios/",
+                                "metodo": "GET,POST",
+                                "descricao": "Geração e visualização de relatórios"
+                            },
+                            {
+                                "id": 3,
+                                "nome": "Contas a Pagar/Receber",
+                                "path": "/api/financeiro/contas/",
+                                "metodo": "GET,POST,PUT",
+                                "descricao": "Gestão de contas financeiras"
                             }
                         ]
                     }
@@ -223,65 +253,100 @@ class RotaSistemaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
         ]
     ),
     post=extend_schema(
-        tags=["Grupos de Rotas"],
-        operation_id="criar_grupo_rotas",
-        summary="Criar novo grupo de rotas",
+        tags=["Grupos de Permissões"],
+        operation_id="criar_grupo_permissoes",
+        summary="Criar novo grupo de permissões",
         description=(
-            "Cria um novo grupo de rotas do sistema associado ao usuário autenticado.\n\n"
-            "### Funcionalidades:\n"
-            "- Criação de grupos personalizados de rotas\n"
-            "- Associação automática ao usuário logado\n"
-            "- Validação de compatibilidade entre rotas e sistema\n"
-            "- Configuração de permissões em lote\n"
+            "Cria um novo grupo de permissões para definir quais rotas os funcionários podem acessar.\n\n"
+            "### Fluxo de Configuração:\n"
+            "1. Empresa cria um grupo (ex: 'Coordenadores')\n"
+            "2. Seleciona as rotas que esse grupo pode acessar\n"
+            "3. Associa funcionários a este grupo\n"
+            "4. Funcionários herdam as permissões do grupo\n\n"
+            "### Casos de Uso Comuns:\n"
+            "```json\n"
+            "{\n"
+            "  \"nome\": \"Supervisores\",\n"
+            "  \"descricao\": \"Acesso a gestão de equipe e relatórios\",\n"
+            "  \"sistema\": 1,\n"
+            "  \"rotas\": [10, 15, 20, 25]\n"
+            "}\n"
+            "```\n\n"
             "### Validações:\n"
-            "- Todas as rotas devem pertencer ao sistema selecionado\n"
-            "- Nome do grupo deve ser único para o usuário\n"
-            "- Sistema deve existir e estar ativo\n"
+            "- Nome deve ser único por empresa\n"
+            "- Rotas devem pertencer ao sistema selecionado\n"
+            "- Sistema deve estar ativo para a empresa\n\n"
             "### Permissões:\n"
-            "- Apenas usuários independentes ou administradores"
+            "- Apenas administradores da empresa matriz"
         ),
         request=GrupoRotaSistemaCreateSerializer,
         responses={
             201: GrupoRotaSistemaListSerializer,
-            400: {"description": "Dados de entrada inválidos ou rotas não pertencem ao sistema"},
-            401: {"description": "Credenciais de autenticação não fornecidas ou inválidas"},
-            403: {"description": "Usuário não tem permissão para criar grupos"}
+            400: {
+                "description": "Erros de validação",
+                "examples": {
+                    "rotas_sistema_invalido": {
+                        "value": {
+                            "error": "Algumas rotas não pertencem ao sistema selecionado"
+                        }
+                    },
+                    "nome_duplicado": {
+                        "value": {
+                            "nome": "Já existe um grupo com este nome"
+                        }
+                    }
+                }
+            },
+            401: {"description": "Credenciais de autenticação não fornecidas"},
+            403: {"description": "Apenas administradores podem criar grupos"}
         },
         examples=[
             OpenApiExample(
-                'Exemplo de requisição - Criar grupo',
+                'Exemplo 1 - Grupo Administrativo',
                 value={
-                    "nome": "Meu Grupo Fiscal",
-                    "descricao": "Grupo para minhas operações fiscais preferidas",
+                    "nome": "Administradores",
+                    "descricao": "Acesso completo a todas as funcionalidades",
                     "sistema": 1,
-                    "rotas": [1, 2, 3, 5]
+                    "rotas": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
                 },
-                request_only=True
+                request_only=True,
+                description="Grupo com acesso total ao sistema"
+            ),
+            OpenApiExample(
+                'Exemplo 2 - Grupo Operacional',
+                value={
+                    "nome": "Equipe Operacional",
+                    "descricao": "Acesso às funcionalidades do dia a dia",
+                    "sistema": 1,
+                    "rotas": [3, 4, 7, 8]
+                },
+                request_only=True,
+                description="Grupo com acesso limitado às operações rotineiras"
             ),
             OpenApiExample(
                 'Exemplo de resposta - Grupo criado',
                 value={
-                    "id": 2,
-                    "nome": "Meu Grupo Fiscal",
-                    "descricao": "Grupo para minhas operações fiscais preferidas",
+                    "id": 3,
+                    "nome": "Equipe Financeira",
+                    "descricao": "Acesso aos módulos financeiros",
                     "sistema": {
                         "id": 1,
-                        "nome": "ERP Fiscal"
+                        "nome": "ERP Corporativo"
                     },
                     "rotas": [
                         {
-                            "id": 1,
-                            "nome": "Consulta NFE",
-                            "path": "/api/nfe/consulta/",
-                            "metodo": "GET",
-                            "descricao": "Endpoint para consulta de notas fiscais"
+                            "id": 2,
+                            "nome": "Relatórios Financeiros",
+                            "path": "/api/financeiro/relatorios/",
+                            "metodo": "GET,POST",
+                            "descricao": "Geração de relatórios financeiros"
                         },
                         {
-                            "id": 2,
-                            "nome": "Emissão NFE",
-                            "path": "/api/nfe/emissao/",
-                            "metodo": "POST",
-                            "descricao": "Endpoint para emissão de notas fiscais"
+                            "id": 5,
+                            "nome": "Conciliação Bancária",
+                            "path": "/api/financeiro/conciliacao/",
+                            "metodo": "GET,POST,PUT",
+                            "descricao": "Conciliação de extratos bancários"
                         }
                     ]
                 },
@@ -317,161 +382,180 @@ class GrupoRotaSistemaListCreateAPIView(generics.ListCreateAPIView):
 
 @extend_schema_view(
     get=extend_schema(
-        tags=["Grupos de Rotas"],
-        operation_id="recuperar_grupo_rotas",
-        summary="Recuperar grupo de rotas específico",
+        tags=["Grupos de Permissões"],
+        operation_id="visualizar_grupo_permissoes",
+        summary="Visualizar detalhes do grupo de permissões",
         description=(
-            "Retorna os detalhes completos de um grupo de rotas específico.\n\n"
-            "### Funcionalidades:\n"
-            "- Visualização detalhada de um grupo específico\n"
-            "- Lista completa das rotas associadas\n"
-            "- Informações do sistema e metadados\n"
+            "Retorna os detalhes completos de um grupo de permissões específico.\n"
+            "### Utilização:\n"
+            "- Verificar quais permissões um grupo possui\n"
+            "- Validar configurações antes de associar funcionários\n"
+            "- Auditoria de acessos concedidos\n"
+            "### Informações Incluídas:\n"
+            "- Lista completa de rotas permitidas\n"
+            "- Metadados do sistema\n"
+            "- Descrição e finalidade do grupo\n"
             "### Permissões:\n"
-            "- Apenas o proprietário do grupo pode visualizá-lo\n"
-            "- Usuários independentes ou administradores\n"
-            "### Observações:\n"
-            "- Retorna 404 se o grupo não existir ou não pertencer ao usuário"
+            "- Apenas administradores da empresa dona do grupo"
         ),
         responses={
             200: GrupoRotaSistemaListSerializer,
-            404: {"description": "Grupo não encontrado ou não pertence ao usuário"},
-            401: {"description": "Credenciais de autenticação não fornecidas ou inválidas"},
-            403: {"description": "Usuário não tem permissão para acessar este recurso"}
+            404: {"description": "Grupo não encontrado ou não pertence à empresa"},
+            403: {"description": "Acesso permitido apenas à empresa proprietária"}
         },
         examples=[
             OpenApiExample(
-                'Exemplo de resposta - Grupo específico',
+                'Exemplo - Grupo de Coordenadores',
                 value={
-                    "id": 1,
-                    "nome": "Grupo Fiscal Avançado",
-                    "descricao": "Grupo para operações fiscais avançadas",
+                    "id": 4,
+                    "nome": "Coordenadores",
+                    "descricao": "Acesso a gestão de equipes e indicadores",
                     "sistema": {
                         "id": 1,
-                        "nome": "ERP Fiscal"
+                        "nome": "ERP Corporativo"
                     },
                     "rotas": [
                         {
-                            "id": 1,
-                            "nome": "Consulta NFE",
-                            "path": "/api/nfe/consulta/",
-                            "metodo": "GET",
-                            "descricao": "Endpoint para consulta de notas fiscais"
+                            "id": 6,
+                            "nome": "Gestão de Equipe",
+                            "path": "/api/rh/equipe/",
+                            "metodo": "GET,POST,PUT",
+                            "descricao": "Gerenciamento de membros da equipe"
                         },
                         {
-                            "id": 3,
-                            "nome": "Cancelamento NFE",
-                            "path": "/api/nfe/cancelamento/",
-                            "metodo": "POST",
-                            "descricao": "Endpoint para cancelamento de notas fiscais"
+                            "id": 7,
+                            "nome": "Indicadores de Performance",
+                            "path": "/api/indicadores/",
+                            "metodo": "GET",
+                            "descricao": "Visualização de KPIs e métricas"
                         },
                         {
-                            "id": 4,
-                            "nome": "Relatório Fiscal",
-                            "path": "/api/fiscal/relatorios/",
-                            "metodo": "GET",
-                            "descricao": "Endpoint para geração de relatórios fiscais"
+                            "id": 8,
+                            "nome": "Relatórios Gerenciais",
+                            "path": "/api/relatorios/gerenciais/",
+                            "metodo": "GET,POST",
+                            "descricao": "Relatórios para tomada de decisão"
                         }
                     ],
                     "usuario": 1
                 },
-                response_only=True
+                response_only=True,
+                description="Exemplo de grupo para coordenadores com acesso a gestão"
             )
         ]
     ),
     put=extend_schema(
-        tags=["Grupos de Rotas"],
-        operation_id="atualizar_grupo_rotas",
-        summary="Atualizar grupo de rotas completo",
+        tags=["Grupos de Permissões"],
+        operation_id="atualizar_grupo_permissoes",
+        summary="Atualizar grupo de permissões",
         description=(
-            "Atualiza completamente um grupo de rotas existente.\n\n"
-            "### Funcionalidades:\n"
-            "- Substitui todos os dados do grupo\n"
-            "- Permite alterar nome, descrição, sistema e rotas\n"
-            "- Validações de integridade mantidas\n"
-            "### Validações:\n"
-            "- Todas as rotas devem pertencer ao novo sistema (se alterado)\n"
-            "- Nome deve permanecer único para o usuário\n"
-            "- Sistema deve existir e estar ativo\n"
+            "Atualiza completamente as permissões de um grupo existente.\n"
+            "### Cenários de Uso:\n"
+            "- Adicionar novas rotas a um grupo existente\n"
+            "- Remover permissões não mais necessárias\n"
+            "- Corrigir configurações de acesso\n"
+            "- Expandir/restringir permissões do grupo\n"
+            "### Impacto:\n"
+            "- Todas as alterações afetam imediatamente os funcionários associados\n"
+            "- Recomendado comunicar mudanças aos usuários afetados\n"
             "### Permissões:\n"
-            "- Apenas o proprietário do grupo pode atualizá-lo"
+            "- Apenas administradores da empresa proprietária"
         ),
         request=GrupoRotaSistemaCreateSerializer,
         responses={
             200: GrupoRotaSistemaListSerializer,
-            400: {"description": "Dados de entrada inválidos"},
-            404: {"description": "Grupo não encontrado ou não pertence ao usuário"},
-            401: {"description": "Credenciais de autenticação não fornecidas ou inválidas"},
-            403: {"description": "Usuário não tem permissão para atualizar este grupo"}
+            400: {"description": "Dados inválidos ou rotas incompatíveis"},
+            404: {"description": "Grupo não encontrado"}
         },
         examples=[
             OpenApiExample(
-                'Exemplo de requisição - Atualização completa',
+                'Exemplo - Adicionar permissões financeiras',
                 value={
-                    "nome": "Grupo Fiscal Atualizado",
-                    "descricao": "Descrição atualizada do grupo fiscal",
+                    "nome": "Coordenadores Expandido",
+                    "descricao": "Acesso ampliado para incluir módulo financeiro",
                     "sistema": 1,
-                    "rotas": [1, 3, 4, 6]
+                    "rotas": [6, 7, 8, 2, 5]  # Adicionando rotas financeiras
                 },
-                request_only=True
+                request_only=True,
+                description="Expansão de permissões para incluir módulo financeiro"
             )
         ]
     ),
     patch=extend_schema(
-        tags=["Grupos de Rotas"],
-        operation_id="atualizar_parcial_grupo_rotas",
-        summary="Atualização parcial do grupo de rotas",
+        tags=["Grupos de Permissões"],
+        operation_id="atualizar_parcial_grupo_permissoes",
+        summary="Atualização parcial do grupo",
         description=(
-            "Atualiza parcialmente um grupo de rotas existente.\n"
-            "### Funcionalidades:\n"
-            "- Permite atualizar apenas campos específicos\n"
-            "- Mantém dados não enviados na requisição\n"
-            "- Ideal para atualizações incrementais\n"
-            "### Validações:\n"
-            "- Aplica validações apenas nos campos enviados\n"
-            "- Mantém validações de integridade para rotas e sistema\n"
+            "Atualiza apenas campos específicos do grupo de permissões.\n"
+            "### Casos de Uso:\n"
+            "- Renomear grupo sem alterar permissões\n"
+            "- Atualizar descrição do grupo\n"
+            "- Adicionar/remover rotas específicas\n"
+            "- Corrigir pequenos ajustes\n"
+            "### Vantagens:\n"
+            "- Não precisa enviar todos os dados\n"
+            "- Menor risco de erro\n"
+            "- Mais eficiente para pequenas mudanças\n"
             "### Permissões:\n"
-            "- Apenas o proprietário do grupo pode atualizá-lo"
+            "- Apenas administradores da empresa proprietária"
         ),
         request=GrupoRotaSistemaCreateSerializer,
         responses={
             200: GrupoRotaSistemaListSerializer,
-            400: {"description": "Dados de entrada inválidos"},
-            404: {"description": "Grupo não encontrado ou não pertence ao usuário"},
-            401: {"description": "Credenciais de autenticação não fornecidas ou inválidas"},
-            403: {"description": "Usuário não tem permissão para atualizar este grupo"}
+            400: {"description": "Dados inválidos"},
+            404: {"description": "Grupo não encontrado"}
         },
         examples=[
             OpenApiExample(
-                'Exemplo de requisição - Atualização parcial',
+                'Exemplo 1 - Apenas renomear',
                 value={
-                    "nome": "Novo Nome do Grupo",
-                    "rotas": [1, 2]
+                    "nome": "Líderes de Equipe"
                 },
-                request_only=True
+                request_only=True,
+                description="Apenas alterando o nome do grupo"
+            ),
+            OpenApiExample(
+                'Exemplo 2 - Adicionar rotas',
+                value={
+                    "rotas": [6, 7, 8, 9]
+                },
+                request_only=True,
+                description="Apenas atualizando a lista de rotas"
             )
         ]
     ),
     delete=extend_schema(
-        tags=["Grupos de Rotas"],
-        operation_id="excluir_grupo_rotas",
-        summary="Excluir grupo de rotas",
+        tags=["Grupos de Permissões"],
+        operation_id="excluir_grupo_permissoes",
+        summary="Excluir grupo de permissões",
         description=(
-            "Exclui permanentemente um grupo de rotas específico.\n"
-            "### Funcionalidades:\n"
-            "- Remove completamente o grupo do sistema\n"
-            "- Não afeta as rotas em si, apenas a associação\n"
-            "- Operação irreversível\n"
+            "Remove permanentemente um grupo de permissões do sistema.\n\n"
+            "### Verificações de Segurança:\n"
+            "- Grupo não pode estar associado a funcionários ativos\n"
+            "- Backup das configurações é recomendado\n"
+            "- Operação irreversível\n\n"
+            "### Fluxo Recomendado:\n"
+            "1. Verificar funcionários associados ao grupo\n"
+            "2. Migrar funcionários para outro grupo se necessário\n"
+            "3. Confirmar exclusão\n"
+            "4. Registrar a ação no log do sistema\n\n"
             "### Permissões:\n"
-            "- Apenas o proprietário do grupo pode excluí-lo\n"
-            "### Observações:\n"
-            "- Esta operação não pode ser desfeita\n"
-            "- Verifique dependências antes da exclusão"
+            "- Apenas administradores da empresa proprietária\n"
+            "- Grupo não pode ter funcionários associados"
         ),
         responses={
             204: {"description": "Grupo excluído com sucesso"},
-            404: {"description": "Grupo não encontrado ou não pertence ao usuário"},
-            401: {"description": "Credenciais de autenticação não fornecidas ou inválidas"},
-            403: {"description": "Usuário não tem permissão para excluir este grupo"}
+            400: {
+                "description": "Grupo não pode ser excluído",
+                "examples": {
+                    "grupo_com_funcionarios": {
+                        "value": {
+                            "error": "Não é possível excluir grupo com funcionários associados"
+                        }
+                    }
+                }
+            },
+            404: {"description": "Grupo não encontrado"}
         }
     )
 )
