@@ -1,14 +1,16 @@
 from django.db.models import Q
 
 from rest_framework import generics
-from rest_framework.views import APIView
 
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from empresa.models import Empresa, CategoriaEmpresa, ConexaoBanco, Funcionario, RotasPermitidas
+from empresa.models import (
+    Empresa, CategoriaEmpresa, ConexaoBanco,
+    Funcionario, RotasPermitidas
+)
 from empresa.serializer import (
     EmpresaCreateSerializer, EmpresaUpdateSerializer, EmpresaListSerializer,
     CategoriaEmpresaModelSerializer, ConexaoBancoModelSerializer,
@@ -23,17 +25,57 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 
 class EmpresaBaseView:
     """Classe base com configurações comuns"""
-    permission_classes = (IsAuthenticated, UsuarioIndependenteOuAdmin)
+
+    def get_permissions(self):
+        if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            return [IsAuthenticated(), UsuarioIndependenteOuAdmin()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Quando a documentação Swagger estiver sendo gerada, retorna vazio
+        # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Empresa.objects.none()
 
         user = self.request.user
-        return Empresa.objects.filter(
-            Q(usuario=user) | Q(matriz_filial__usuario=user)
-        ).distinct()
+
+        try:
+            # Verifica se é funcionário ativo
+            funcionario = Funcionario.objects.filter(
+                user=user,
+                status='1',
+                role='funcionario'
+            ).select_related('empresa').first()
+
+            if funcionario:
+                empresa = funcionario.empresa
+
+                # Verifica se a empresa ainda está ativa
+                if empresa.status != '1':
+                    raise PermissionDenied(
+                        detail="A empresa vinculada à sua conta está inativa. "
+                               "O acesso a esta funcionalidade foi bloqueado."
+                    )
+
+                # Funcionário ativo + empresa ativa → retorna só ela
+                return Empresa.objects.filter(id=empresa.id)
+
+        except PermissionDenied:
+            raise  # Repassa a exceção corretamente
+        except Exception:
+            return Empresa.objects.none()
+
+        # Caso o usuário não seja funcionário → verificar empresas ativas dele
+        empresas = Empresa.objects.filter(
+            Q(usuario=user) | Q(matriz_filial__usuario=user),
+            status='1'  # Apenas empresas ativas
+        )
+
+        if not empresas.exists():
+            raise PermissionDenied(
+                detail="Você não possui nenhuma empresa ativa vinculada à sua conta."
+            )
+
+        return empresas
 
 
 @extend_schema_view(
@@ -162,7 +204,7 @@ class EmpresaRetrieveUpdateDestroyAPIView(EmpresaBaseView, generics.RetrieveUpda
 class CategoriaEmpresaListCreateAPIView(generics.ListCreateAPIView):
     queryset = CategoriaEmpresa.objects.all()
     serializer_class = CategoriaEmpresaModelSerializer
-    permission_classes = (IsAuthenticated, )
+    permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -182,7 +224,7 @@ class CategoriaEmpresaListCreateAPIView(generics.ListCreateAPIView):
 class CategoriaEmpresaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = CategoriaEmpresa.objects.all()
     serializer_class = CategoriaEmpresaModelSerializer
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = [IsAuthenticated, GlobalDefaultPermission]
 
 
 @extend_schema_view(
@@ -255,7 +297,7 @@ class CategoriaEmpresaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestro
 )
 class ConexaoBancoListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = ConexaoBancoModelSerializer
-    permission_classes = (IsAuthenticated, UsuarioIndependenteOuAdmin)
+    permission_classes = [IsAuthenticated, UsuarioIndependenteOuAdmin]
     pagination_class = None
 
     # def get_queryset(self):
@@ -283,27 +325,33 @@ class ConexaoBancoListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        conexao_queryset = ConexaoBanco.objects.filter(empresa__usuario=user).first()
 
-        # Retornando o único objeto dentro de uma lista
-        return [conexao_queryset] if conexao_queryset else []
+        # Retorna a conexão da empresa matriz do usuário (apenas ativa)
+        conexao = (
+            ConexaoBanco.objects.filter(
+                empresa__usuario=user,
+                empresa__status='1',
+                empresa__matriz_filial__isnull=True
+            ).first()
+        )
+
+        return [conexao] if conexao else []
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
         user = self.request.user
 
-        try:
-            empresa = Empresa.objects.filter(
+        # Verifica se o usuário possui empresa matriz ativa
+        empresa = (
+            Empresa.objects.filter(
                 usuario=user,
-                matriz_filial__isnull=True,  # É matriz
-                status='1'  # Ativa
+                matriz_filial__isnull=True,
+                status='1'
             ).first()
+        )
 
-            if not empresa:
-                raise ValidationError('Empresa matriz ativa não encontrada para o usuário.')
-
-        except Empresa.DoesNotExist:
-            raise ValidationError('Empresa não encontrada para o usuário.')
+        if not empresa:
+            raise PermissionDenied('A empresa vinculada à sua conta está inativa.')
 
         context['empresa'] = empresa
         return context

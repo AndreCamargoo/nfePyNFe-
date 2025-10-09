@@ -365,6 +365,35 @@ paths:
           description: Dados inválidos
         '403':
           description: Permissão negada
+  /api/v1/sistemas/:
+    get:
+      operationId: 01_listar_sistemas
+      description: "\n        Retorna uma lista de todos os sistemas cadastrados no\
+        \ sistema.\n        \n        **Permissões:**\n        - Usuários autenticados\
+        \ que são independentes ou administradores\n        "
+      summary: 01 Listar sistemas disponíveis
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Sistema
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSistemaList'
+          description: ''
+        '401':
+          description: No response body
+        '403':
+          description: No response body
   /api/v1/sistemas/rotas/:
     get:
       operationId: 01_listar_rotas_por_sistema
@@ -1206,9 +1235,8 @@ paths:
         ### Regras de negócio:
         - O usuário deve ter uma **empresa matriz ativa**
         - Apenas **uma conexão por empresa matriz** é permitida
-        - O campo **criar_banco** só será considerado se:
-          - O administrador do sistema tiver liberado a permissão no `EmpresaSistema`
-          - Caso contrário, o valor será ignorado e tratado como `False`
+        - O campo **criar banco** só será considerado se:
+          - O administrador do sistema tiver liberado a permissão
         - Campos sensíveis como senha são **criptografados** automaticamente antes do armazenamento
       summary: 08 Criar conexão de banco
       tags:
@@ -1496,15 +1524,13 @@ paths:
           description: ''
     delete:
       operationId: 14_funcionario_delete
-      description: |-
+      description: |
         Realiza **soft delete** (desativação) de um funcionário.
 
         ### Regras de negócio:
         - Altera o status do funcionário para '2' (inativo)
         - Se o usuário **não estiver vinculado a outras empresas ativas**, desativa também a conta de usuário
         - Se o usuário **estiver vinculado a outras empresas**, mantém a conta ativa
-        - **Não remove fisicamente** os dados do banco
-        - O funcionário não aparecerá mais nas listagens
       summary: 14 Desativar funcionário
       parameters:
       - in: path
@@ -1833,6 +1859,1625 @@ paths:
               schema:
                 description: Rota permitida não encontrada
           description: ''
+  /api/v1/nfes/:
+    get:
+      operationId: 01_listar_notas_fisicais
+      description: "\n        Retorna uma lista paginada de notas fiscais da matriz\
+        \ e todas filiais com filtros avançados.\n        \n        **Permissões requeridas:**\n\
+        \        - Usuário autenticado\n        - Acesso via funcionário ativo ou\
+        \ proprietário da empresa\n        \n        **Filtros disponíveis:**\n  \
+        \      - `ide_cUF`: Código da UF do emitente\n        - `emitente_nome`: Nome\
+        \ do emitente\n        - `chave`: Chave da nota fiscal\n        - `dhEmi`:\
+        \ Data de emissão (range: dhEmi_after & dhEmi_before)\n        - `emitente_CNPJ`:\
+        \ CNPJ do emitente\n        - `emitente_xNome`: Razão social do emitente\n\
+        \        - `q`: Pesquisa geral (CNPJ, nome ou chave)\n        "
+      summary: 01 Listar notas fiscais
+      parameters:
+      - in: query
+        name: ide_cUF
+        schema:
+          type: string
+        description: Filtrar por código UF do emitente
+      - in: query
+        name: emitente_nome
+        schema:
+          type: string
+        description: Filtrar por nome do emitente
+      - in: query
+        name: chave
+        schema:
+          type: string
+        description: Filtrar por chave da nota fiscal
+      - in: query
+        name: dhEmi_after
+        schema:
+          type: string
+          format: date
+        description: Data de emissão inicial (YYYY-MM-DD)
+      - in: query
+        name: dhEmi_before
+        schema:
+          type: string
+          format: date
+        description: Data de emissão final (YYYY-MM-DD)
+      - in: query
+        name: emitente_CNPJ
+        schema:
+          type: string
+        description: Filtrar por CNPJ do emitente
+      - in: query
+        name: emitente_xNome
+        schema:
+          type: string
+        description: Filtrar por razão social do emitente
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (CNPJ, nome, chave ou data)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      tags:
+      - '[Allnube] NF'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNfeModelList'
+              examples:
+                ExemploDeResposta:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 150
+                      next: http://api.example.com/api/v1/nfes/?page=2
+                      previous: null
+                      results:
+                      - id: 1
+                        chave: '35210507564634000135550010000012341000012345'
+                        dhEmi: '2023-10-15T14:30:00Z'
+                        emitente:
+                          xNome: Empresa Exemplo Ltda
+                          CNPJ: 07.564.634/0001-35
+                        valor: 1500.75
+                  summary: Exemplo de resposta
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/nfes/matriz/:
+    get:
+      operationId: 02_listar_notas_fiscais_matriz
+      description: "\n        Retorna todas as notas fiscais da matriz do usuário\
+        \ autenticado.\n        \n        **Características:**\n        - Lista apenas\
+        \ notas da matriz (empresa principal)\n        - Não requer parâmetros na\
+        \ URL\n        - Aplica filtros e paginação\n        - Retorna apenas notas\
+        \ não deletadas\n        \n        **Permissões requeridas:**\n        - Usuário\
+        \ autenticado\n        - Acesso via funcionário ativo ou proprietário da empresa\n\
+        \        \n        **Filtros disponíveis:**\n        - `ide_cUF`: Código da\
+        \ UF do emitente\n        - `emitente_nome`: Nome do emitente  \n        -\
+        \ `chave`: Chave da nota fiscal\n        - `dhEmi`: Data de emissão (range:\
+        \ dhEmi_after & dhEmi_before)\n        - `emitente_CNPJ`: CNPJ do emitente\n\
+        \        - `emitente_xNome`: Razão social do emitente\n        - `q`: Pesquisa\
+        \ geral (CNPJ, nome ou chave)\n        "
+      summary: 02 Listar notas fiscais da matriz
+      parameters:
+      - in: query
+        name: ide_cUF
+        schema:
+          type: string
+        description: Filtrar por código UF do emitente
+      - in: query
+        name: emitente_nome
+        schema:
+          type: string
+        description: Filtrar por nome do emitente
+      - in: query
+        name: chave
+        schema:
+          type: string
+        description: Filtrar por chave da nota fiscal
+      - in: query
+        name: dhEmi_after
+        schema:
+          type: string
+          format: date
+        description: Data de emissão inicial (YYYY-MM-DD)
+      - in: query
+        name: dhEmi_before
+        schema:
+          type: string
+          format: date
+        description: Data de emissão final (YYYY-MM-DD)
+      - in: query
+        name: emitente_CNPJ
+        schema:
+          type: string
+        description: Filtrar por CNPJ do emitente
+      - in: query
+        name: emitente_xNome
+        schema:
+          type: string
+        description: Filtrar por razão social do emitente
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (CNPJ, nome, chave ou data)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      tags:
+      - '[Allnube] NF'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNfeModelList'
+              examples:
+                Exemplo-ListarNotasDaMatriz:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 85
+                      next: http://api.example.com/api/v1/nfes/matriz/?page=2
+                      previous: null
+                      results:
+                      - id: 1
+                        chave: '35210507564634000135550010000012341000012345'
+                        dhEmi: '2023-10-15T14:30:00Z'
+                        emitente:
+                          xNome: Matriz Principal Ltda
+                          CNPJ: 07.564.634/0001-35
+                        valor: 2500.0
+                  summary: Exemplo - Listar notas da matriz
+                  description: Requisição para listar notas da matriz
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/nfes/filial/{documento}/:
+    get:
+      operationId: 03_listar_notas_fiscais_filial
+      description: "\n        Retorna notas fiscais de uma filial específica através\
+        \ do documento (CNPJ).\n        \n        **Características:**\n        -\
+        \ Lista notas de uma filial específica\n        - Requer o documento (CNPJ)\
+        \ da filial como parâmetro na URL\n        - Valida se a filial pertence à\
+        \ matriz do usuário\n        - Valida se a filial está ativa\n        - Retorna\
+        \ apenas notas não deletadas\n        \n        **Permissões requeridas:**\n\
+        \        - Usuário autenticado\n        - Acesso via funcionário ativo ou\
+        \ proprietário da empresa\n        \n        **Filtros disponíveis:**\n  \
+        \      - `ide_cUF`: Código da UF do emitente\n        - `emitente_nome`: Nome\
+        \ do emitente  \n        - `chave`: Chave da nota fiscal\n        - `dhEmi`:\
+        \ Data de emissão (range: dhEmi_after & dhEmi_before)\n        - `emitente_CNPJ`:\
+        \ CNPJ do emitente\n        - `emitente_xNome`: Razão social do emitente\n\
+        \        - `q`: Pesquisa geral (CNPJ, nome ou chave)\n        "
+      summary: 03 Listar notas fiscais por filial
+      parameters:
+      - in: query
+        name: ide_cUF
+        schema:
+          type: string
+        description: Filtrar por código UF do emitente
+      - in: query
+        name: emitente_nome
+        schema:
+          type: string
+        description: Filtrar por nome do emitente
+      - in: query
+        name: chave
+        schema:
+          type: string
+        description: Filtrar por chave da nota fiscal
+      - in: query
+        name: dhEmi_after
+        schema:
+          type: string
+          format: date
+        description: Data de emissão inicial (YYYY-MM-DD)
+      - in: query
+        name: dhEmi_before
+        schema:
+          type: string
+          format: date
+        description: Data de emissão final (YYYY-MM-DD)
+      - in: query
+        name: emitente_CNPJ
+        schema:
+          type: string
+        description: Filtrar por CNPJ do emitente
+      - in: query
+        name: emitente_xNome
+        schema:
+          type: string
+        description: Filtrar por razão social do emitente
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (CNPJ, nome, chave ou data)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      - in: path
+        name: documento
+        schema:
+          type: integer
+        description: Documento (CNPJ) da filial - obrigatório
+        required: true
+      tags:
+      - '[Allnube] NF'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNfeModelList'
+              examples:
+                Exemplo-ListarNotasDaFilial:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 23
+                      next: null
+                      previous: null
+                      results:
+                      - id: 45
+                        chave: '35210507564634000135550010000056781000056789'
+                        dhEmi: '2023-10-16T10:15:00Z'
+                        emitente:
+                          xNome: Filial São Paulo Ltda
+                          CNPJ: 07.564.634/0002-16
+                        valor: 1800.5
+                  summary: Exemplo - Listar notas da filial
+                  description: Requisição para listar notas de uma filial específica
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-DocumentoObrigatório:
+                  value:
+                    error: Documento é obrigatório
+                  summary: Exemplo - Documento obrigatório
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-FilialNãoEncontrada:
+                  value:
+                    detail: A filial não foi encontrada.
+                  summary: Exemplo - Filial não encontrada
+          description: ''
+  /api/v1/nfes/{id}/:
+    get:
+      operationId: 04_obter_nota_fiscal
+      description: "\n        Retorna os detalhes completos de uma nota fiscal específica.\n\
+        \        \n        **Informações incluídas:**\n        - Dados básicos da\
+        \ nota (chave, versão, datas)\n        - Informações do emitente\n       \
+        \ - Informações do destinatário  \n        - Produtos e impostos\n       \
+        \ - Totais e valores\n        - Informações de transporte\n        - Cobrança\
+        \ e pagamentos\n        \n        **Permissões requeridas:**\n        - Usuário\
+        \ autenticado\n        - Acesso via funcionário ativo ou proprietário da empresa\n\
+        \        - Permissão para visualizar a nota específica\n        "
+      summary: 04 Obter detalhes de uma nota fiscal
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - '[Allnube] NF'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NfeModel'
+              examples:
+                Exemplo-DetalhesDaNotaFiscal:
+                  value:
+                    id: 1
+                    chave: '35210507564634000135550010000012341000012345'
+                    versao: '4.00'
+                    dhEmi: '2023-10-15T14:30:00Z'
+                    dhSaiEnt: '2023-10-15T15:00:00Z'
+                    tpAmb: 1
+                    fileXml: xml/notas/nota_1234.xml
+                    deleted_at: null
+                    emitente:
+                      CNPJ: 07.564.634/0001-35
+                      xNome: Empresa Exemplo Ltda
+                      xFant: Empresa Exemplo
+                      IE: 123.456.789.012
+                      CRT: 1
+                      xLgr: Rua Exemplo
+                      nro: '123'
+                      xBairro: Centro
+                      cMun: '3550308'
+                      xMun: São Paulo
+                      UF: SP
+                      CEP: 01234-567
+                      cPais: '1058'
+                      xPais: Brasil
+                      fone: '1123456789'
+                    destinatario:
+                      CNPJ: 12.345.678/0001-90
+                      xNome: Cliente Exemplo Ltda
+                      IE: 987.654.321.098
+                      indIEDest: 1
+                      xLgr: Avenida Cliente
+                      nro: '456'
+                      xCpl: Sala 101
+                      xBairro: Jardins
+                      cMun: '3550308'
+                      xMun: São Paulo
+                      UF: SP
+                      CEP: 04567-890
+                      cPais: '1058'
+                      xPais: Brasil
+                    produtos:
+                    - nItem: 1
+                      cProd: PROD001
+                      cEAN: '7891234567890'
+                      xProd: Produto Exemplo
+                      NCM: 8471.60.90
+                      CFOP: '5102'
+                      uCom: UN
+                      qCom: '10.0000'
+                      vUnCom: '150.0000'
+                      vProd: '1500.00'
+                      uTrib: UN
+                      qTrib: '10.0000'
+                      vUnTrib: '150.0000'
+                      indTot: 1
+                    impostos:
+                    - vTotTrib: '350.25'
+                      orig: '0'
+                      CST: '00'
+                    total:
+                      vBC: '1500.00'
+                      vICMS: '270.00'
+                      vICMSDeson: '0.00'
+                      vFCP: '0.00'
+                      vBCST: '0.00'
+                      vST: '0.00'
+                      vFCPST: '0.00'
+                      vFCPSTRet: '0.00'
+                      vProd: '1500.00'
+                      vFrete: '0.00'
+                      vSeg: '0.00'
+                      vDesc: '0.00'
+                      vII: '0.00'
+                      vIPI: '0.00'
+                      vIPIDevol: '0.00'
+                      vPIS: '9.75'
+                      vCOFINS: '45.00'
+                      vOutro: '25.50'
+                      vNF: '1500.00'
+                      vTotTrib: '350.25'
+                  summary: Exemplo - Detalhes da nota fiscal
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/nfes/produtos/:
+    get:
+      operationId: 01_listar_todos_produtos_notas_fiscais
+      description: "\n        Retorna todos os produtos de todas as notas fiscais\
+        \ da matriz e suas filiais.\n        \n        **Características:**\n    \
+        \    - Lista produtos de todas as notas fiscais (matriz + filiais)\n     \
+        \   - Inclui informações de impostos de cada produto\n        - Aplica filtros\
+        \ específicos para produtos\n        - Retorna dados paginados\n        \n\
+        \        **Escopo dos dados:**\n        - Produtos da matriz do usuário\n\
+        \        - Produtos de todas as filiais da matriz\n        - Apenas produtos\
+        \ de notas fiscais não deletadas\n        \n        **Estrutura do produto:**\n\
+        \        - Dados básicos do produto (código, descrição, NCM, etc.)\n     \
+        \   - Quantidades e valores (comercial e tributário)\n        - Informações\
+        \ de impostos (ICMS, IPI, PIS, COFINS)\n        \n        **Permissões requeridas:**\n\
+        \        - Usuário autenticado\n        - Acesso via funcionário ativo ou\
+        \ proprietário da empresa\n        "
+      summary: 01 Listar todos os produtos das notas fiscais
+      parameters:
+      - in: query
+        name: cProd
+        schema:
+          type: string
+        description: Filtrar por código do produto
+      - in: query
+        name: xProd
+        schema:
+          type: string
+        description: Filtrar por descrição do produto
+      - in: query
+        name: cEAN
+        schema:
+          type: string
+        description: Filtrar por código EAN
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (descrição, código do produto ou EAN)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      tags:
+      - '[Allnube] NF Produto'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProdutoModelList'
+              examples:
+                Exemplo-ListaDeProdutos:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 1250
+                      next: http://api.example.com/api/v1/nfes/produtos/?page=2
+                      previous: null
+                      results:
+                      - id: 1
+                        nItem: 1
+                        cProd: PROD001
+                        cEAN: '7891234567890'
+                        xProd: Notebook Dell Inspiron 15
+                        NCM: 8471.30.10
+                        CFOP: '5102'
+                        uCom: UN
+                        qCom: '2.0000'
+                        vUnCom: '2500.0000'
+                        vProd: '5000.00'
+                        uTrib: UN
+                        qTrib: '2.0000'
+                        vUnTrib: '2500.0000'
+                        indTot: 1
+                        nota_fiscal: 123
+                        imposto:
+                          vTotTrib: '1250.50'
+                          orig: '0'
+                          CST: '00'
+                          vIPI: '500.00'
+                          vPIS: '32.50'
+                          vCOFINS: '150.00'
+                      - id: 2
+                        nItem: 2
+                        cProd: PROD002
+                        cEAN: '7891234567891'
+                        xProd: Mouse Óptico USB
+                        NCM: 8471.60.90
+                        CFOP: '5102'
+                        uCom: UN
+                        qCom: '10.0000'
+                        vUnCom: '25.0000'
+                        vProd: '250.00'
+                        uTrib: UN
+                        qTrib: '10.0000'
+                        vUnTrib: '25.0000'
+                        indTot: 1
+                        nota_fiscal: 123
+                        imposto:
+                          vTotTrib: '62.50'
+                          orig: '0'
+                          CST: '00'
+                          vIPI: '0.00'
+                          vPIS: '1.63'
+                          vCOFINS: '7.50'
+                  summary: Exemplo - Lista de produtos
+                Exemplo-ProdutoSemImposto:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 3
+                      nItem: 1
+                      cProd: PROD003
+                      cEAN: '7891234567892'
+                      xProd: Teclado Mecânico
+                      NCM: 8471.60.90
+                      CFOP: '5102'
+                      uCom: UN
+                      qCom: '5.0000'
+                      vUnCom: '150.0000'
+                      vProd: '750.00'
+                      uTrib: UN
+                      qTrib: '5.0000'
+                      vUnTrib: '150.0000'
+                      indTot: 1
+                      nota_fiscal: 124
+                      imposto: null
+                  summary: Exemplo - Produto sem imposto
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/nfes/produtos/matriz/:
+    get:
+      operationId: 02_listar_produtos_matriz
+      description: "\n        Retorna todos os produtos das notas fiscais da matriz\
+        \ do usuário.\n        \n        **Características:**\n        - Lista produtos\
+        \ apenas das notas fiscais da matriz\n        - Inclui informações de impostos\
+        \ de cada produto\n        - Aplica filtros específicos para produtos\n  \
+        \      - Retorna dados paginados\n        - Ordenado por data de emissão (mais\
+        \ recente primeiro) e número do item\n        \n        **Estrutura do produto:**\n\
+        \        - Dados básicos do produto (código, descrição, NCM, etc.)\n     \
+        \   - Quantidades e valores (comercial e tributário)\n        - Informações\
+        \ de impostos (ICMS, IPI, PIS, COFINS)\n        - Dados relacionados da nota\
+        \ fiscal\n        \n        **Permissões requeridas:**\n        - Usuário\
+        \ autenticado\n        - Acesso via funcionário ativo ou proprietário da empresa\n\
+        \        "
+      summary: 02 Listar produtos das notas fiscais da matriz
+      parameters:
+      - in: query
+        name: cProd
+        schema:
+          type: string
+        description: Filtrar por código do produto
+      - in: query
+        name: xProd
+        schema:
+          type: string
+        description: Filtrar por descrição do produto
+      - in: query
+        name: cEAN
+        schema:
+          type: string
+        description: Filtrar por código EAN
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (descrição, código do produto ou EAN)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      tags:
+      - '[Allnube] NF Produto'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProdutoModelList'
+              examples:
+                Exemplo-ProdutosDaMatriz:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 450
+                      next: http://api.example.com/api/v1/nfes/produtos/matriz/?page=2
+                      previous: null
+                      results:
+                      - id: 1
+                        nItem: 1
+                        cProd: MATRIZ001
+                        cEAN: '7891234567890'
+                        xProd: Serviço de Consultoria Técnica
+                        NCM: 9985.19.00
+                        CFOP: '5933'
+                        uCom: UN
+                        qCom: '1.0000'
+                        vUnCom: '5000.0000'
+                        vProd: '5000.00'
+                        uTrib: UN
+                        qTrib: '1.0000'
+                        vUnTrib: '5000.0000'
+                        indTot: 1
+                        nota_fiscal: 100
+                        imposto:
+                          vTotTrib: '1350.00'
+                          orig: '0'
+                          CST: '00'
+                          vIPI: '0.00'
+                          vPIS: '32.50'
+                          vCOFINS: '150.00'
+                  summary: Exemplo - Produtos da matriz
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/nfes/produtos/filial/{documento}/:
+    get:
+      operationId: 03_listar_produtos_filial
+      description: "\n        Retorna todos os produtos das notas fiscais de uma filial\
+        \ específica.\n        \n        **Características:**\n        - Lista produtos\
+        \ apenas das notas fiscais da filial especificada\n        - Valida se a filial\
+        \ pertence à matriz do usuário\n        - Valida se a filial está ativa\n\
+        \        - Inclui informações de impostos de cada produto\n        - Aplica\
+        \ filtros específicos para produtos\n        - Retorna dados paginados\n \
+        \       - Ordenado por data de emissão (mais recente primeiro) e número do\
+        \ item\n        \n        **Permissões requeridas:**\n        - Usuário autenticado\n\
+        \        - Acesso via funcionário ativo ou proprietário da empresa\n     \
+        \   "
+      summary: 03 Listar produtos das notas fiscais de uma filial
+      parameters:
+      - in: query
+        name: cProd
+        schema:
+          type: string
+        description: Filtrar por código do produto
+      - in: query
+        name: xProd
+        schema:
+          type: string
+        description: Filtrar por descrição do produto
+      - in: query
+        name: cEAN
+        schema:
+          type: string
+        description: Filtrar por código EAN
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (descrição, código do produto ou EAN)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      - in: path
+        name: documento
+        schema:
+          type: integer
+        description: Documento (CNPJ) da filial - obrigatório
+        required: true
+      tags:
+      - '[Allnube] NF Produto'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProdutoModelList'
+              examples:
+                Exemplo-ProdutosDaFilial:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 120
+                      next: null
+                      previous: null
+                      results:
+                      - id: 50
+                        nItem: 1
+                        cProd: FILIAL001
+                        cEAN: '7891234567900'
+                        xProd: Produto de Varejo - Filial
+                        NCM: 8517.12.10
+                        CFOP: '5102'
+                        uCom: UN
+                        qCom: '50.0000'
+                        vUnCom: '89.9000'
+                        vProd: '4495.00'
+                        uTrib: UN
+                        qTrib: '50.0000'
+                        vUnTrib: '89.9000'
+                        indTot: 1
+                        nota_fiscal: 200
+                        imposto:
+                          vTotTrib: '1123.75'
+                          orig: '0'
+                          CST: '00'
+                          vIPI: '0.00'
+                          vPIS: '29.22'
+                          vCOFINS: '134.85'
+                  summary: Exemplo - Produtos da filial
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-DocumentoObrigatório:
+                  value:
+                    documento:
+                    - Documento é obrigatório
+                  summary: Exemplo - Documento obrigatório
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-FilialNãoEncontrada:
+                  value:
+                    detail: A filial não foi encontrada.
+                  summary: Exemplo - Filial não encontrada
+          description: ''
+  /api/v1/nfe/produto/{id}/:
+    get:
+      operationId: 04_obter_detalhes_produto
+      description: "\n        Retorna os detalhes completos de um produto específico\
+        \ incluindo todas as informações relacionadas.\n        \n        **Informações\
+        \ incluídas:**\n        - **Dados do produto**: código, descrição, NCM, CFOP,\
+        \ quantidades, valores\n        - **Impostos do produto**: ICMS, IPI, PIS,\
+        \ COFINS, totais tributários\n        - **Nota fiscal completa**: dados da\
+        \ nota, IDE, emitente, destinatário\n        - **Totais da nota**: valores\
+        \ de ICMS, PIS, COFINS, frete, seguros, etc.\n        - **Transporte**: modalidade\
+        \ de frete, quantidades de volumes\n        - **Cobrança e pagamentos**: informações\
+        \ financeiras da nota\n        \n        **Escopo de acesso:**\n        -\
+        \ Produto deve pertencer à matriz do usuário OU a uma de suas filiais\n  \
+        \      - Apenas produtos de notas fiscais não deletadas\n        \n      \
+        \  **Permissões requeridas:**\n        - Usuário autenticado\n        - Acesso\
+        \ via funcionário ativo ou proprietário da empresa\n        - Permissão para\
+        \ visualizar o produto específico\n        "
+      summary: 04 Obter detalhes completos de um produto
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        description: ID do produto - obrigatório
+        required: true
+      tags:
+      - '[Allnube] NF Produto'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdutoModel'
+              examples:
+                Exemplo-DetalhesCompletosDoProduto:
+                  value:
+                    id: 123
+                    nItem: 1
+                    cProd: PROD001
+                    cEAN: '7891234567890'
+                    xProd: Notebook Dell Inspiron 15 i7 16GB 512GB SSD
+                    NCM: 8471.30.10
+                    CFOP: '5102'
+                    uCom: UN
+                    qCom: '1.0000'
+                    vUnCom: '4500.0000'
+                    vProd: '4500.00'
+                    uTrib: UN
+                    qTrib: '1.0000'
+                    vUnTrib: '4500.0000'
+                    indTot: 1
+                    nota_fiscal: 100
+                    imposto:
+                      vTotTrib: '1125.00'
+                      orig: '0'
+                      CST: '00'
+                      vIPI: '0.00'
+                      vPIS: '29.25'
+                      vCOFINS: '135.00'
+                    nota_fiscal_detalhes:
+                      ide:
+                        cUF: '35'
+                        natOp: Venda de mercadoria
+                        mod: '55'
+                        serie: '1'
+                        nNF: '12345'
+                        tpNF: '1'
+                        dhEmi: '2023-10-15T14:30:00Z'
+                        dhSaiEnt: '2023-10-15T15:00:00Z'
+                      emitente:
+                        CNPJ: 07.564.634/0001-35
+                        xNome: Empresa Matriz Ltda
+                        xFant: Matriz Principal
+                        IE: 123.456.789.012
+                        xLgr: Rua das Flores
+                        nro: '123'
+                        xBairro: Centro
+                        xMun: São Paulo
+                        UF: SP
+                      destinatario:
+                        CNPJ: 12.345.678/0001-90
+                        xNome: Cliente Exemplo Ltda
+                        IE: 987.654.321.098
+                        xLgr: Avenida Principal
+                        nro: '456'
+                        xMun: Rio de Janeiro
+                        UF: RJ
+                      total:
+                        vBC: '4500.00'
+                        vICMS: '810.00'
+                        vProd: '4500.00'
+                        vFrete: '50.00'
+                        vSeg: '25.00'
+                        vDesc: '100.00'
+                        vPIS: '29.25'
+                        vCOFINS: '135.00'
+                        vNF: '4475.00'
+                        vTotTrib: '1125.00'
+                      transporte:
+                        modFrete: 0
+                        qVol: 1
+                      cobranca:
+                        nFat: FAT001
+                        vOrig: '4475.00'
+                        vDesc: '0.00'
+                        vLiq: '4475.00'
+                        pagamentos:
+                        - tPag: '01'
+                          vPag: '4475.00'
+                  summary: Exemplo - Detalhes completos do produto
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-AcessoNegado:
+                  value:
+                    detail: Você não tem permissão para acessar este produto.
+                  summary: Exemplo - Acesso negado
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-ProdutoNãoEncontrado:
+                  value:
+                    detail: Não encontrado.
+                  summary: Exemplo - Produto não encontrado
+          description: ''
+  /api/v1/nfes/forncedor/:
+    get:
+      operationId: 01_listar_todos_fornecedores
+      description: "\n        Retorna todos os fornecedores (emitentes) das notas\
+        \ fiscais da matriz e suas filiais.\n        \n        **Características:**\n\
+        \        - Lista todos os emitentes das notas fiscais da matriz e filiais\n\
+        \        - Fornecedores únicos baseados nas notas fiscais\n        - Aplica\
+        \ filtros específicos para fornecedores\n        - Retorna dados paginados\n\
+        \        \n        **Escopo dos dados:**\n        - Emitentes das notas fiscais\
+        \ da matriz do usuário\n        - Emitentes das notas fiscais de todas as\
+        \ filiais da matriz\n        - Apenas emitentes de notas fiscais não deletadas\n\
+        \        \n        **Informações do emitente:**\n        - Dados cadastrais\
+        \ (CNPJ, razão social, nome fantasia)\n        - Inscrição estadual (IE) e\
+        \ regime tributário (CRT)\n        - Endereço completo (logradouro, número,\
+        \ bairro, cidade, UF, CEP)\n        - Contato (telefone)\n        \n     \
+        \   **Permissões requeridas:**\n        - Usuário autenticado\n        - Acesso\
+        \ via funcionário ativo ou proprietário da empresa\n        "
+      summary: 01 Listar todos os fornecedores
+      parameters:
+      - in: query
+        name: CNPJ
+        schema:
+          type: string
+        description: Filtrar por CNPJ do fornecedor
+      - in: query
+        name: xNome
+        schema:
+          type: string
+        description: Filtrar por razão social do fornecedor
+      - in: query
+        name: fone
+        schema:
+          type: string
+        description: Filtrar por telefone do fornecedor
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (CNPJ, razão social ou telefone)
+      - in: query
+        name: cnpj
+        schema:
+          type: string
+        description: Filtrar por CNPJ (contém)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      tags:
+      - '[Allnube] NF Fornecedores'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEmitenteModelList'
+              examples:
+                Exemplo-ListaDeFornecedores:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 85
+                      next: http://api.example.com/api/v1/nfes/fornecedores/?page=2
+                      previous: null
+                      results:
+                      - id: 1
+                        CNPJ: '07564634000135'
+                        xNome: Fornecedor Principal Ltda
+                        xFant: Fornecedor Principal
+                        IE: '123456789012'
+                        CRT: 1
+                        xLgr: Avenida das Indústrias
+                        nro: '1000'
+                        xBairro: Centro Industrial
+                        cMun: '3550308'
+                        xMun: São Paulo
+                        UF: SP
+                        CEP: '01234567'
+                        cPais: '1058'
+                        xPais: Brasil
+                        fone: '1133334444'
+                        nota_fiscal: 123
+                      - id: 2
+                        CNPJ: '11222333000144'
+                        xNome: Distribuidora de Materiais Ltda
+                        xFant: Distribuidora Materiais
+                        IE: '987654321098'
+                        CRT: 2
+                        xLgr: Rua do Comércio
+                        nro: '500'
+                        xBairro: Comercial
+                        cMun: '3550308'
+                        xMun: São Paulo
+                        UF: SP
+                        CEP: 02345678
+                        cPais: '1058'
+                        xPais: Brasil
+                        fone: '1122223333'
+                        nota_fiscal: 124
+                  summary: Exemplo - Lista de fornecedores
+                Exemplo-FornecedorComDadosMínimos:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 3
+                      CNPJ: '99888777000166'
+                      xNome: Serviços Gerais ME
+                      xFant: null
+                      IE: '456789123456'
+                      CRT: 3
+                      xLgr: Rua Pequena
+                      nro: '25'
+                      xBairro: Vila Nova
+                      cMun: '3550308'
+                      xMun: São Paulo
+                      UF: SP
+                      CEP: 03456789
+                      cPais: '1058'
+                      xPais: Brasil
+                      fone: '1199998888'
+                      nota_fiscal: 125
+                  summary: Exemplo - Fornecedor com dados mínimos
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/nfes/forncedor/matriz/:
+    get:
+      operationId: 02_listar_fornecedores_matriz
+      description: "\n        Retorna todos os fornecedores (emitentes) das notas\
+        \ fiscais da matriz.\n        \n        **Características:**\n        - Lista\
+        \ apenas fornecedores das notas fiscais da matriz\n        - Inclui dados\
+        \ relacionados das notas fiscais\n        - Aplica filtros específicos para\
+        \ fornecedores\n        - Retorna dados paginados\n        - Ordenado por\
+        \ data de emissão (mais recente primeiro) e nome do fornecedor\n        \n\
+        \        **Informações do emitente:**\n        - Dados cadastrais (CNPJ, razão\
+        \ social, nome fantasia)\n        - Inscrição estadual (IE) e regime tributário\
+        \ (CRT)\n        - Endereço completo (logradouro, número, bairro, cidade,\
+        \ UF, CEP)\n        - Contato (telefone)\n        - Dados relacionados da\
+        \ nota fiscal\n        \n        **Permissões requeridas:**\n        - Usuário\
+        \ autenticado\n        - Acesso via funcionário ativo ou proprietário da empresa\n\
+        \        "
+      summary: 02 Listar fornecedores/emitentes da matriz
+      parameters:
+      - in: query
+        name: CNPJ
+        schema:
+          type: string
+        description: Filtrar por CNPJ do fornecedor
+      - in: query
+        name: xNome
+        schema:
+          type: string
+        description: Filtrar por razão social do fornecedor
+      - in: query
+        name: fone
+        schema:
+          type: string
+        description: Filtrar por telefone do fornecedor
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (CNPJ, razão social ou telefone)
+      - in: query
+        name: cnpj
+        schema:
+          type: string
+        description: Filtrar por CNPJ (contém)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      tags:
+      - '[Allnube] NF Fornecedores'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEmitenteModelList'
+              examples:
+                Exemplo-FornecedoresDaMatriz:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 45
+                      next: http://api.example.com/api/v1/nfes/fornecedores/matriz/?page=2
+                      previous: null
+                      results:
+                      - id: 1
+                        CNPJ: '07564634000135'
+                        xNome: Fornecedor Exclusivo Matriz Ltda
+                        xFant: Fornecedor Matriz
+                        IE: '123456789012'
+                        CRT: 1
+                        xLgr: Avenida Principal
+                        nro: '1000'
+                        xBairro: Centro
+                        cMun: '3550308'
+                        xMun: São Paulo
+                        UF: SP
+                        CEP: '01234567'
+                        cPais: '1058'
+                        xPais: Brasil
+                        fone: '1133334444'
+                        nota_fiscal: 100
+                      - id: 2
+                        CNPJ: '99887766000144'
+                        xNome: Distribuidora Central Ltda
+                        xFant: Distribuidora Central
+                        IE: '987654321098'
+                        CRT: 2
+                        xLgr: Rua das Indústrias
+                        nro: '500'
+                        xBairro: Industrial
+                        cMun: '3550308'
+                        xMun: São Paulo
+                        UF: SP
+                        CEP: 02345678
+                        cPais: '1058'
+                        xPais: Brasil
+                        fone: '1122223333'
+                        nota_fiscal: 101
+                  summary: Exemplo - Fornecedores da matriz
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/nfes/forncedor/filial/{documento}/:
+    get:
+      operationId: 03_listar_fornecedores_filial
+      description: "\n        Retorna todos os fornecedores (emitentes) das notas\
+        \ fiscais de uma filial específica.\n        \n        **Características:**\n\
+        \        - Lista apenas fornecedores das notas fiscais da filial especificada\n\
+        \        - Valida se a filial pertence à matriz do usuário\n        - Valida\
+        \ se a filial está ativa\n        - Inclui dados relacionados das notas fiscais\n\
+        \        - Aplica filtros específicos para fornecedores\n        - Retorna\
+        \ dados paginados\n        - Ordenado por data de emissão (mais recente primeiro)\
+        \ e nome do fornecedor\n        \n        **Validações:**\n        - Documento\
+        \ (CNPJ) da filial é obrigatório\n        - Filial deve pertencer à matriz\
+        \ do usuário\n        - Filial deve estar com status ativo\n        \n   \
+        \     **Permissões requeridas:**\n        - Usuário autenticado\n        -\
+        \ Acesso via funcionário ativo ou proprietário da empresa\n        "
+      summary: 03 Listar fornecedores/emitentes de uma filial
+      parameters:
+      - in: query
+        name: CNPJ
+        schema:
+          type: string
+        description: Filtrar por CNPJ do fornecedor
+      - in: query
+        name: xNome
+        schema:
+          type: string
+        description: Filtrar por razão social do fornecedor
+      - in: query
+        name: fone
+        schema:
+          type: string
+        description: Filtrar por telefone do fornecedor
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (CNPJ, razão social ou telefone)
+      - in: query
+        name: cnpj
+        schema:
+          type: string
+        description: Filtrar por CNPJ (contém)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      - in: path
+        name: documento
+        schema:
+          type: integer
+        description: Documento (CNPJ) da filial - obrigatório
+        required: true
+      tags:
+      - '[Allnube] NF Fornecedores'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEmitenteModelList'
+              examples:
+                Exemplo-FornecedoresDaFilial:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 25
+                      next: null
+                      previous: null
+                      results:
+                      - id: 50
+                        CNPJ: '11223344000155'
+                        xNome: Fornecedor Local Filial Ltda
+                        xFant: Fornecedor Local
+                        IE: '456789123456'
+                        CRT: 1
+                        xLgr: Rua da Filial
+                        nro: '200'
+                        xBairro: Centro
+                        cMun: '3550308'
+                        xMun: São Paulo
+                        UF: SP
+                        CEP: 03456789
+                        cPais: '1058'
+                        xPais: Brasil
+                        fone: '1199998888'
+                        nota_fiscal: 200
+                      - id: 51
+                        CNPJ: '55443322000166'
+                        xNome: Distribuidora Regional ME
+                        xFant: Distribuidora Regional
+                        IE: '321654987321'
+                        CRT: 3
+                        xLgr: Avenida Regional
+                        nro: '150'
+                        xBairro: Zona Norte
+                        cMun: '3550308'
+                        xMun: São Paulo
+                        UF: SP
+                        CEP: 04567890
+                        cPais: '1058'
+                        xPais: Brasil
+                        fone: '1188887777'
+                        nota_fiscal: 201
+                  summary: Exemplo - Fornecedores da filial
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-DocumentoObrigatório:
+                  value:
+                    documento:
+                    - Documento é obrigatório
+                  summary: Exemplo - Documento obrigatório
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-FilialNãoEncontrada:
+                  value:
+                    detail: A filial não foi encontrada.
+                  summary: Exemplo - Filial não encontrada
+          description: ''
+  /api/v1/nfes/forncedor/{id}/:
+    get:
+      operationId: 04_obter_detalhes_fornecedor
+      description: "\n        Retorna os detalhes completos de um fornecedor/emitente\
+        \ específico.\n        \n        **Informações incluídas:**\n        - **Dados\
+        \ cadastrais**: CNPJ, razão social, nome fantasia\n        - **Dados fiscais**:\
+        \ Inscrição Estadual (IE), Código de Regime Tributário (CRT)\n        - **Endereço\
+        \ completo**: logradouro, número, complemento, bairro, município, UF, CEP\n\
+        \        - **Dados de localização**: código do município, código do país\n\
+        \        - **Contato**: telefone\n        - **Relacionamento**: ID da nota\
+        \ fiscal associada\n        \n        **Escopo de acesso:**\n        - Fornecedor\
+        \ deve pertencer à matriz do usuário OU a uma de suas filiais\n        - Apenas\
+        \ fornecedores de notas fiscais não deletadas\n        \n        **Casos de\
+        \ uso típicos:**\n        - Visualizar informações completas de um fornecedor\
+        \ específico\n        - Obter dados para cadastro em sistema de terceiros\n\
+        \        - Consultar informações fiscais para validação\n        - Recuperar\
+        \ dados de contato e endereço\n        \n        **Permissões requeridas:**\n\
+        \        - Usuário autenticado\n        - Acesso via funcionário ativo ou\
+        \ proprietário da empresa\n        - Permissão para visualizar o fornecedor\
+        \ específico\n        "
+      summary: 04 Obter detalhes completos de um fornecedor
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        description: ID do fornecedor/emitente - obrigatório
+        required: true
+      tags:
+      - '[Allnube] NF Fornecedores'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmitenteModel'
+              examples:
+                Exemplo-FornecedorPessoaJurídica:
+                  value:
+                    id: 123
+                    CNPJ: '07564634000135'
+                    xNome: Fornecedor Exemplo Ltda
+                    xFant: Fornecedor Exemplo
+                    IE: '123456789012'
+                    CRT: 1
+                    xLgr: Avenida das Indústrias
+                    nro: '1000'
+                    xBairro: Centro Industrial
+                    cMun: '3550308'
+                    xMun: São Paulo
+                    UF: SP
+                    CEP: '01234567'
+                    cPais: '1058'
+                    xPais: Brasil
+                    fone: '1133334444'
+                    nota_fiscal: 100
+                  summary: Exemplo - Fornecedor pessoa jurídica
+                Exemplo-FornecedorSemNomeFantasia:
+                  value:
+                    id: 124
+                    CNPJ: '11223344000155'
+                    xNome: Comércio e Distribuição Ltda
+                    xFant: null
+                    IE: '987654321098'
+                    CRT: 2
+                    xLgr: Rua do Comércio
+                    nro: '500'
+                    xBairro: Centro
+                    cMun: '3550308'
+                    xMun: São Paulo
+                    UF: SP
+                    CEP: 02345678
+                    cPais: '1058'
+                    xPais: Brasil
+                    fone: '1122223333'
+                    nota_fiscal: 101
+                  summary: Exemplo - Fornecedor sem nome fantasia
+                Exemplo-FornecedorMEI:
+                  value:
+                    id: 125
+                    CNPJ: '99887766000144'
+                    xNome: José Silva MEI
+                    xFant: Serviços Silva
+                    IE: '456789123456'
+                    CRT: 3
+                    xLgr: Rua Pequena
+                    nro: '25'
+                    xBairro: Vila Nova
+                    cMun: '3550308'
+                    xMun: São Paulo
+                    UF: SP
+                    CEP: 03456789
+                    cPais: '1058'
+                    xPais: Brasil
+                    fone: '1199998888'
+                    nota_fiscal: 102
+                  summary: Exemplo - Fornecedor MEI
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-AcessoNegado:
+                  value:
+                    detail: Você não tem permissão para acessar este fornecedor.
+                  summary: Exemplo - Acesso negado
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Exemplo-FornecedorNãoEncontrado:
+                  value:
+                    detail: Não encontrado.
+                  summary: Exemplo - Fornecedor não encontrado
+          description: ''
 components:
   schemas:
     CategoriaEmpresaModel:
@@ -1944,9 +3589,81 @@ components:
       - password
       - porta
       - usuario
-    EmpresaCreate:
+    EmitenteModel:
       type: object
-      description: Serializer específico para criação
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        CNPJ:
+          type: string
+          nullable: true
+          maxLength: 14
+        xNome:
+          type: string
+          nullable: true
+          maxLength: 100
+        xFant:
+          type: string
+          nullable: true
+          maxLength: 100
+        IE:
+          type: string
+          nullable: true
+          maxLength: 20
+        CRT:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        xLgr:
+          type: string
+          nullable: true
+          maxLength: 100
+        nro:
+          type: string
+          nullable: true
+          maxLength: 10
+        xBairro:
+          type: string
+          nullable: true
+          maxLength: 50
+        cMun:
+          type: string
+          nullable: true
+          maxLength: 7
+        xMun:
+          type: string
+          nullable: true
+          maxLength: 50
+        UF:
+          type: string
+          nullable: true
+          maxLength: 2
+        CEP:
+          type: string
+          nullable: true
+          maxLength: 8
+        cPais:
+          type: string
+          nullable: true
+          maxLength: 4
+        xPais:
+          type: string
+          nullable: true
+          maxLength: 50
+        fone:
+          type: string
+          nullable: true
+          maxLength: 15
+        nota_fiscal:
+          type: integer
+      required:
+      - CRT
+      - id
+      - nota_fiscal
+    EmpresaBase:
+      type: object
+      description: Serializer base com validações comuns
       properties:
         id:
           type: integer
@@ -1979,6 +3696,9 @@ components:
           readOnly: true
         usuario:
           type: integer
+        sistema:
+          type: integer
+          nullable: true
         categoria:
           type: integer
           nullable: true
@@ -1989,10 +3709,70 @@ components:
       - created_at
       - id
       - updated_at
+    EmpresaCreate:
+      type: object
+      description: Serializer específico para criação
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sistema:
+          type: integer
+        razao_social:
+          type: string
+          maxLength: 200
+        documento:
+          type: string
+          maxLength: 18
+        ie:
+          type: string
+          nullable: true
+          maxLength: 15
+        uf:
+          $ref: '#/components/schemas/UfEnum'
+        senha:
+          type: string
+          maxLength: 255
+        file:
+          type: string
+          format: uri
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        usuario:
+          type: integer
+          readOnly: true
+        categoria:
+          type: integer
+          nullable: true
+        matriz_filial:
+          type: integer
+          nullable: true
+      required:
+      - created_at
+      - documento
+      - id
+      - razao_social
+      - senha
+      - sistema
+      - status
+      - uf
+      - updated_at
+      - usuario
     EmpresaCreateRequest:
       type: object
       description: Serializer específico para criação
       properties:
+        sistema:
+          type: integer
         razao_social:
           type: string
           minLength: 1
@@ -2009,7 +3789,6 @@ components:
           $ref: '#/components/schemas/UfEnum'
         senha:
           type: string
-          writeOnly: true
           minLength: 1
           maxLength: 255
         file:
@@ -2018,8 +3797,6 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/StatusEnum'
-        usuario:
-          type: integer
         categoria:
           type: integer
           nullable: true
@@ -2027,7 +3804,12 @@ components:
           type: integer
           nullable: true
       required:
+      - documento
+      - razao_social
       - senha
+      - sistema
+      - status
+      - uf
     EmpresaList:
       type: object
       description: Serializer para listagem (pode incluir campos calculados ou relacionados)
@@ -2063,6 +3845,9 @@ components:
           readOnly: true
         usuario:
           type: integer
+        sistema:
+          type: integer
+          nullable: true
         categoria:
           type: integer
           nullable: true
@@ -2109,6 +3894,9 @@ components:
         usuario:
           type: integer
           readOnly: true
+        sistema:
+          type: integer
+          nullable: true
         categoria:
           type: integer
           nullable: true
@@ -2149,6 +3937,9 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/StatusEnum'
+        sistema:
+          type: integer
+          nullable: true
         categoria:
           type: integer
           nullable: true
@@ -2334,6 +4125,73 @@ components:
       - sistema_nome
       - usuario
       - usuario_nome
+    NfeModel:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        chave:
+          type: string
+          maxLength: 44
+        versao:
+          type: string
+          maxLength: 10
+        dhEmi:
+          type: string
+          format: date-time
+          nullable: true
+        dhSaiEnt:
+          type: string
+          format: date-time
+          nullable: true
+        fileXml:
+          type: string
+          format: uri
+          nullable: true
+        filePdf:
+          type: string
+          format: uri
+          nullable: true
+        empresa:
+          $ref: '#/components/schemas/EmpresaBase'
+        ide:
+          type: string
+          readOnly: true
+        emitente:
+          type: string
+          readOnly: true
+        destinatario:
+          type: string
+          readOnly: true
+        produtos:
+          type: string
+          readOnly: true
+        total:
+          type: string
+          readOnly: true
+        transporte:
+          type: string
+          readOnly: true
+        cobranca:
+          type: string
+          readOnly: true
+        pagamentos:
+          type: string
+          readOnly: true
+      required:
+      - chave
+      - cobranca
+      - destinatario
+      - emitente
+      - empresa
+      - id
+      - ide
+      - pagamentos
+      - produtos
+      - total
+      - transporte
+      - versao
     PaginatedCategoriaEmpresaModelList:
       type: object
       required:
@@ -2357,6 +4215,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CategoriaEmpresaModel'
+    PaginatedEmitenteModelList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmitenteModel'
     PaginatedEmpresaListList:
       type: object
       required:
@@ -2449,6 +4330,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GrupoRotaSistemaList'
+    PaginatedNfeModelList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/NfeModel'
+    PaginatedProdutoModelList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProdutoModel'
     PaginatedRotaSistemaModelList:
       type: object
       required:
@@ -2472,6 +4399,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RotaSistemaModel'
+    PaginatedSistemaList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sistema'
     PatchedEmpresaUpdateRequest:
       type: object
       description: Serializer específico para atualização
@@ -2501,6 +4451,9 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/StatusEnum'
+        sistema:
+          type: integer
+          nullable: true
         categoria:
           type: integer
           nullable: true
@@ -2558,6 +4511,84 @@ components:
           type: array
           items:
             type: integer
+    ProdutoModel:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nItem:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        cProd:
+          type: string
+          nullable: true
+          maxLength: 20
+        cEAN:
+          type: string
+          nullable: true
+          maxLength: 20
+        xProd:
+          type: string
+          nullable: true
+          maxLength: 200
+        NCM:
+          type: string
+          nullable: true
+          maxLength: 10
+        CFOP:
+          type: string
+          nullable: true
+          maxLength: 4
+        uCom:
+          type: string
+          nullable: true
+          maxLength: 6
+        qCom:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
+          nullable: true
+        vUnCom:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
+          nullable: true
+        vProd:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        uTrib:
+          type: string
+          nullable: true
+          maxLength: 6
+        qTrib:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
+          nullable: true
+        vUnTrib:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
+          nullable: true
+        indTot:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        nota_fiscal:
+          type: integer
+        imposto:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - imposto
+      - indTot
+      - nItem
+      - nota_fiscal
     RoleEnum:
       enum:
       - admin
@@ -2595,6 +4626,25 @@ components:
       - nome
       - path
       - sistema
+    Sistema:
+      type: object
+      description: |-
+        Serializer para o modelo Sistema.
+
+        Utilizado para operações CRUD básicas do cadastro de sistemas.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 100
+        descricao:
+          type: string
+          nullable: true
+      required:
+      - id
+      - nome
     StatusEnum:
       enum:
       - '1'

@@ -1,3 +1,4 @@
+from empresa.models import Funcionario, Empresa
 from rest_framework.pagination import PageNumberPagination
 
 from django.shortcuts import get_object_or_404
@@ -23,3 +24,41 @@ def get_empresas_filtradas(user, documento):
         empresas_filtradas = Empresa.objects.filter(pk=minha_empresa.id)
 
     return empresas_filtradas
+
+
+def obter_matriz_funcionario(user):
+    """
+    Função utilitária para obter a matriz do funcionário
+    Pode ser reutilizada em qualquer view
+    """
+    try:
+        # Verifica se é funcionário ativo
+        funcionario = Funcionario.objects.filter(
+            user=user,
+            status='1',
+            role='funcionario',
+            empresa__sistema_id=3
+        ).select_related('empresa').first()
+
+        if funcionario:
+            empresa = funcionario.empresa
+            return empresa.id
+        else:
+            # Usuário não é funcionário - pega primeira matriz
+            matriz = Empresa.objects.filter(
+                usuario=user,
+                matriz_filial__isnull=True,
+                status='1',
+                sistema_id=3
+            ).first()
+
+            if matriz:
+                print(f"Matriz encontrada - Empresa ID: {matriz.id}")
+                return matriz.id
+            else:
+                print("Nenhuma matriz encontrada")
+                return None
+
+    except Exception as e:
+        print(f"Erro ao obter matriz: {e}")
+        return None

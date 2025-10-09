@@ -13,11 +13,33 @@ from sistema.serializer import (
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
 
-@extend_schema(exclude=True)
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Sistema"],
+        operation_id="01_listar_sistemas",
+        summary="01 Listar sistemas disponíveis",
+        description="""
+        Retorna uma lista de todos os sistemas cadastrados no sistema.
+        
+        **Permissões:**
+        - Usuários autenticados que são independentes ou administradores
+        """,
+        responses={
+            200: SistemaSerializer(many=True),
+            401: None,  # Não autenticado
+            403: None,  # Sem permissão
+        }
+    ),
+    post=extend_schema(exclude=True)
+)
 class SistemaListCreateAPIView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsAdminUser, GlobalDefaultPermission]
     queryset = Sistema.objects.all()
     serializer_class = SistemaSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), IsAdminUser(), GlobalDefaultPermission()]
+        return [IsAuthenticated(), UsuarioIndependenteOuAdmin()]
 
 
 @extend_schema(exclude=True)

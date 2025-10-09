@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from empresa.models import Empresa, CategoriaEmpresa, ConexaoBanco, Funcionario, RotasPermitidas, STATUS_CHOICES
 from sistema.models import GrupoRotaSistema
 
-from sistema.models import EmpresaSistema
+from sistema.models import EmpresaSistema, Sistema
 from sistema.serializer import GrupoRotaSistemaListSerializer
 
 
@@ -48,46 +48,66 @@ class EmpresaBaseSerializer(serializers.ModelSerializer):
 class EmpresaCreateSerializer(EmpresaBaseSerializer):
     """Serializer específico para criação"""
 
+    # Força o campo a ser obrigatório no schema da documentação
+    sistema = serializers.PrimaryKeyRelatedField(
+        queryset=Sistema.objects.all(),
+        required=True,
+        allow_null=False
+    )
+
+    class Meta(EmpresaBaseSerializer.Meta):
+        extra_kwargs = {
+            'usuario': {'read_only': True},  # evita exigir esse campo no body
+        }
+
     def validate(self, attrs):
         user = self.context['request'].user
         matriz_filial = attrs.get('matriz_filial', None)
-
-        # Verificando se a categoria foi enviada
+        sistema = attrs.get('sistema', None)
         categoria = attrs.get('categoria', None)
+
+        # Sistema é obrigatório
+        if sistema is None:
+            raise ValidationError({"sistema": "O campo sistema é obrigatório."})
+
+        # Categoria é obrigatória
         if categoria is None:
             raise ValidationError({"categoria": "O campo categoria é obrigatório."})
 
-        # Validação da categoria vinculada
-        if categoria is not None:
-            # Garantir que a categoria exista
-            if not CategoriaEmpresa.objects.filter(pk=categoria.pk).exists():
-                raise ValidationError({"categoria": "A categoria indicada não existe."})
+        # Validação da categoria
+        if not CategoriaEmpresa.objects.filter(pk=categoria.pk).exists():
+            raise ValidationError({"categoria": "A categoria indicada não existe."})
 
         # Se for filial
         if matriz_filial is not None:
-            # Garante que a matriz indicada pertence ao usuário
             if matriz_filial.usuario != user:
                 raise ValidationError(
                     {"matriz_filial": "Você só pode cadastrar filiais vinculadas a empresas que pertencem a você."}
                 )
-
-            # Garante que a matriz indicada não seja uma filial
             if matriz_filial.matriz_filial is not None:
                 raise ValidationError(
-                    {"matriz_filial": "Uma filial não pode ser vinculada a outra filial. Selecione uma empresa matriz."}
+                    {"matriz_filial": "Uma filial não pode ser vinculada a outra filial. Selecione uma matriz válida."}
+                )
+            if matriz_filial.sistema != sistema:
+                raise ValidationError(
+                    {"matriz_filial": "A matriz e a filial devem pertencer ao mesmo sistema."}
                 )
 
-            # Garante que o usuário já tenha ao menos uma matriz
-            matriz_exists = Empresa.objects.filter(usuario=user, matriz_filial__isnull=True).exists()
-            if not matriz_exists:
+        else:
+            # Se não for filial (ou seja, é matriz)
+            matriz_existente = Empresa.objects.filter(
+                usuario=user,
+                sistema=sistema,
+                matriz_filial__isnull=True
+            ).exists()
+            if matriz_existente:
                 raise ValidationError(
-                    {"matriz_filial": "Você precisa ter uma empresa matriz cadastrada para poder criar filiais."}
+                    {"sistema": "Você já possui uma empresa matriz cadastrada neste sistema."}
                 )
 
         return attrs
 
     def create(self, validated_data):
-        """Força sempre o vínculo da empresa ao usuário autenticado."""
         validated_data['usuario'] = self.context['request'].user
         return super().create(validated_data)
 
@@ -102,6 +122,13 @@ class EmpresaUpdateSerializer(EmpresaBaseSerializer):
             'documento': {'required': False},  # Mantém como não obrigatório em updates
             'senha': {'required': False, 'write_only': True},  # Senha não obrigatória em updates, write_only recurso, não será retornado nas respostas
         }
+
+    def update(self, instance, validated_data):
+        # 👇 Se o campo "sistema" vier explicitamente como None, ignora a alteração
+        if 'sistema' in validated_data and validated_data['sistema'] is None:
+            validated_data.pop('sistema')  # removido
+
+        return super().update(instance, validated_data)
 
 
 class EmpresaListSerializer(EmpresaBaseSerializer):
@@ -142,21 +169,20 @@ class ConexaoBancoModelSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        """Valida se a empresa tem permissão para criar banco de dados"""
         empresa = self.context.get('empresa')
 
         if not empresa:
-            raise serializers.ValidationError('Empresa não encontrada no contexto.')
+            raise ValidationError('Empresa não encontrada no contexto.')
 
-        # Verificar se a empresa tem permissão para criar banco em algum sistema
-        sistemas_empresa = EmpresaSistema.objects.filter(
+        # 🔐 Verifica se empresa tem permissão para criar banco
+        tem_permissao = EmpresaSistema.objects.filter(
             empresa=empresa,
             ativo=True,
-            criar_banco=True  # Deve estar True em pelo menos um sistema
-        )
+            criar_banco=True
+        ).exists()
 
-        if not sistemas_empresa.exists():
-            raise serializers.ValidationError(
+        if not tem_permissao:
+            raise ValidationError(
                 'Esta empresa não tem permissão para cadastrar banco de dados. '
                 'Contate o administrador para liberar esta funcionalidade.'
             )
@@ -253,15 +279,15 @@ class FuncionarioSerializer(serializers.ModelSerializer):
         try:
             funcionario_atual = Funcionario.objects.get(user=user, empresa_id=empresa_id)
             if funcionario_atual.role != Funcionario.ADMIN:
-                raise serializers.ValidationError('Apenas administradores podem criar ou atualizar funcionários.')
+                raise ValidationError('Apenas administradores podem criar ou atualizar funcionários.')
         except Funcionario.DoesNotExist:
-            raise serializers.ValidationError('Você não está vinculado a essa empresa.')
+            raise ValidationError('Você não está vinculado a essa empresa.')
 
         if User.objects.filter(username=username).exists():
             user_existente = User.objects.get(username=username)
             funcionario_existente = Funcionario.objects.filter(user=user_existente, empresa_id=empresa_id).first()
             if funcionario_existente and (not instance or funcionario_existente.id != instance.id):
-                raise serializers.ValidationError('Este usuário já está vinculado a essa empresa.')
+                raise ValidationError('Este usuário já está vinculado a essa empresa.')
 
         # NOVA VALIDAÇÃO: Verificar limite de funcionários (apenas para criação)
         if not instance:  # Apenas na criação, não na atualização
@@ -292,12 +318,12 @@ class FuncionarioSerializer(serializers.ModelSerializer):
             ).count()
 
             if funcionarios_ativos >= max_funcionarios:
-                raise serializers.ValidationError(
-                    f'Limite de funcionários atingido. Máximo permitido: {max_funcionarios}'
-                )
+                raise ValidationError({
+                    "limite": f'Limite de funcionários atingido. Máximo permitido: {max_funcionarios}'
+                })
 
         except Empresa.DoesNotExist:
-            raise serializers.ValidationError('Empresa não encontrada.')
+            raise ValidationError({'empresa': 'Empresa não encontrada.'})
 
     def create(self, validated_data):
         empresa_id = validated_data.pop('empresa_id')
@@ -353,27 +379,27 @@ class FuncionarioRotaModelSerializer(serializers.ModelSerializer):
 
         # Verifica se rota e funcionário são válidos
         if funcionario is None or rota is None:
-            raise serializers.ValidationError("Campos 'funcionario' e 'rota' são obrigatórios.")
+            raise ValidationError("Campos 'funcionario' e 'rota' são obrigatórios.")
 
         # Verifica duplicidade (funcionário + rota)
         qs = RotasPermitidas.objects.filter(funcionario=funcionario, rota=rota)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise serializers.ValidationError(
+            raise ValidationError(
                 f"O funcionário '{funcionario.user.username}' já possui essa rota atribuída."
             )
 
         # Verifica se o funcionário pertence à empresa que usa o mesmo sistema da rota
         if rota.sistema not in [es.sistema for es in funcionario.empresa.sistemas.all()]:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 f"A rota pertence ao sistema '{rota.sistema.nome}', "
                 f"mas a empresa '{funcionario.empresa.razao_social}' não possui este sistema vinculado."
             )
 
         # Valida status
         if status not in dict(STATUS_CHOICES):
-            raise serializers.ValidationError("Status inválido.")
+            raise ValidationError("Status inválido.")
 
         return attrs
 

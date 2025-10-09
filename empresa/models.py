@@ -48,6 +48,7 @@ class CategoriaEmpresa(models.Model):
 
 class Empresa(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='empresas')
+    sistema = models.ForeignKey('sistema.Sistema', on_delete=models.CASCADE, related_name='sistemas', null=True, blank=True)
     categoria = models.ForeignKey(CategoriaEmpresa, on_delete=models.SET_NULL, null=True, blank=True, related_name='empresas_categoria')
     matriz_filial = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='filiais')
     razao_social = models.CharField(max_length=200)
@@ -60,13 +61,29 @@ class Empresa(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['usuario', 'sistema'],
+                condition=models.Q(matriz_filial__isnull=True),
+                name='unique_matriz_por_usuario_sistema'
+            )
+        ]
+
     def __str__(self):
         return self.razao_social
 
     def save(self, *args, **kwargs):
-        # Quando a empresa é criada, o usuário é automaticamente associado como admin
+        is_new = self.pk is None  # identifica se é criação
         super().save(*args, **kwargs)
-        Funcionario.objects.create(user=self.usuario, empresa=self, role=Funcionario.ADMIN)
+
+        if is_new:
+            # Cria o funcionário administrador apenas no momento da criação
+            Funcionario.objects.create(
+                user=self.usuario,
+                empresa=self,
+                role=Funcionario.ADMIN
+            )
 
 
 class HistoricoNSU(models.Model):

@@ -4,16 +4,14 @@ def remove_specific_paths(endpoints, **kwargs):
     """
     allowed_views = {
         # Autenticação
-        'CustomTokenObtainPairView',
-        'CustomTokenRefreshView',
-        'CustomTokenVerifyView',
-        'UserProfileCreateView',
-        'PasswordResetRequestAPIView',
-        'PasswordResetConfirmAPIView',
+        'CustomTokenObtainPairView', 'CustomTokenRefreshView', 'CustomTokenVerifyView', 'UserProfileCreateView',
+        'PasswordResetRequestAPIView', 'PasswordResetConfirmAPIView',
 
         # Autenticaçao Perfil
-        'UserProfileView',
-        'UserUpdateProfile',
+        'UserProfileView', 'UserUpdateProfile',
+
+        # Sistemas
+        'SistemaListCreateAPIView',
 
         # Rotas disponiveis de acordo com o sistema
         'RotaSistemaListCreateAPIView',
@@ -22,23 +20,28 @@ def remove_specific_paths(endpoints, **kwargs):
         'CategoriaEmpresaListCreateAPIView',
 
         # Cadastro empresa
-        'EmpresaListCreateAPIView',
-        'EmpresaRetrieveUpdateDestroyAPIView',
+        'EmpresaListCreateAPIView', 'EmpresaRetrieveUpdateDestroyAPIView',
 
         # Cadastro empresa conexão
         'ConexaoBancoListCreateAPIView',
 
         # Cadastro empresa funcionarios
-        'FuncionarioListCreateAPIView',
-        'FuncionarioRetrieveUpdateDestroyAPIView',
+        'FuncionarioListCreateAPIView', 'FuncionarioRetrieveUpdateDestroyAPIView',
 
         # Cadastro empresa permissão de navegação
-        'FuncionarioRotasListCreateAPIView',
-        'FuncionarioRotasRetrieveUpdateDestroyAPIView',
+        'FuncionarioRotasListCreateAPIView', 'FuncionarioRotasRetrieveUpdateDestroyAPIView',
 
         # Cadastrar grupo de rotas de acesso a funcionarios
-        'GrupoRotaSistemaListCreateAPIView',
-        'GrupoRotaSistemaRetrieveUpdateDestroyAPIView',
+        'GrupoRotaSistemaListCreateAPIView', 'GrupoRotaSistemaRetrieveUpdateDestroyAPIView',
+
+        # Notas fiscais completas
+        'NfeListCreateAPIView', 'NfeListMatrizAPIView', 'NfeListFilialAPIView', 'NfeRetrieveUpdateDestroyAPIView',
+
+        # Notas fisica (produtos)
+        'NfeTodosProdutosListAPIView', 'NfeProdutosMatrizListAPIView', 'NfeProdutosFilialListAPIView', 'NfeProdutoRetrieveAPIView',
+
+        # Nota fiscal (fornecedores)
+        'NfeTodosFornecedorListAPIView', 'NfeFornecedorMatrizListAPIView', 'NfeFornecedorFilialListAPIView', 'NfeFornecedorRetrieveAPIView',
     }
 
     filtered_endpoints = []

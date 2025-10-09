@@ -16,15 +16,17 @@ class NotaFiscalFilter(django_filters.FilterSet):
     dhEmi = django_filters.DateFromToRangeFilter(field_name='dhEmi')
     emitente_CNPJ = django_filters.CharFilter(field_name='emitente__CNPJ', lookup_expr='icontains')
     emitente_xNome = django_filters.CharFilter(field_name='emitente__xNome', lookup_expr='icontains')
+    chave = django_filters.CharFilter(field_name='chave', lookup_expr='icontains')
 
     class Meta:
         model = NotaFiscal
-        fields = ['ide_cUF', 'emitente_nome', 'dhEmi', 'emitente_CNPJ', 'emitente_xNome']
+        fields = ['ide_cUF', 'emitente_nome', 'chave', 'dhEmi', 'emitente_CNPJ', 'emitente_xNome']
 
     def filter_by_q(self, queryset, name, value):
         filters = (
             Q(emitente__CNPJ__icontains=value) |
-            Q(emitente__xNome__icontains=value)
+            Q(emitente__xNome__icontains=value) |
+            Q(chave__icontains=value)
         )
 
         # Tenta interpretar como data (vários formatos)
@@ -42,8 +44,8 @@ class NotaFiscalFilter(django_filters.FilterSet):
 
 class ProdutoFilter(django_filters.FilterSet):
     q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
-    cProd = django_filters.CharFilter(field_name='cProd', lookup_expr='icontains')
     xProd = django_filters.CharFilter(field_name='xProd', lookup_expr='icontains')
+    cProd = django_filters.CharFilter(field_name='cProd', lookup_expr='icontains')
     cEAN = django_filters.CharFilter(field_name='cEAN', lookup_expr='icontains')
 
     class Meta:
@@ -51,21 +53,35 @@ class ProdutoFilter(django_filters.FilterSet):
         fields = ['cProd', 'xProd', 'cEAN']
 
     def filter_by_q(self, queryset, name, value):
-        if value:
-            # Usando Q para aplicar OR entre as colunas
-            return queryset.filter(
-                Q(cProd__icontains=value) |
-                Q(xProd__icontains=value) |
-                Q(cEAN__icontains=value)
-            )
-        return queryset
+        filters = (
+            Q(xProd__icontains=value) |
+            Q(cProd__icontains=value) |
+            Q(cEAN__icontains=value)
+        )
+        return queryset.filter(filters)
 
 
 class FornecedorFilter(django_filters.FilterSet):
-    q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
-    cnpj = django_filters.CharFilter(field_name='CNPJ', lookup_expr='icontains')
-    xNome = django_filters.CharFilter(field_name='xNome', lookup_expr='icontains')
-    fone = django_filters.CharFilter(field_name='fone', lookup_expr='icontains')
+    q = django_filters.CharFilter(
+        method='filter_by_q',
+        label="Pesquisar",
+        help_text="Pesquisa em CNPJ, razão social ou telefone"
+    )
+    cnpj = django_filters.CharFilter(
+        field_name='CNPJ',
+        lookup_expr='icontains',
+        help_text="Filtrar por CNPJ (contém)"
+    )
+    xNome = django_filters.CharFilter(
+        field_name='xNome',
+        lookup_expr='icontains',
+        help_text="Filtrar por razão social (contém)"
+    )
+    fone = django_filters.CharFilter(
+        field_name='fone',
+        lookup_expr='icontains',
+        help_text="Filtrar por telefone (contém)"
+    )
 
     class Meta:
         model = Emitente
