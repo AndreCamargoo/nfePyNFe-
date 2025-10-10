@@ -24,17 +24,22 @@ class Command(BaseCommand):
         xml_dir = os.path.join(settings.MEDIA_ROOT, 'xml')
         os.makedirs(xml_dir, exist_ok=True)
 
-        for empresa in Empresa.objects.all():
-            if not empresa.file:  # sem certificado
-                self.stderr.write(f'[ERRO] Empresa {empresa.razao_social} não possui certificado associado.')
-                continue
+        # FILTRAR APENAS EMPRESAS COM CERTIFICADO (file preenchido)
+        empresas_com_certificado = Empresa.objects.filter(file__isnull=False).exclude(file='')
+
+        if not empresas_com_certificado.exists():
+            self.stdout.write('[INFO] Nenhuma empresa com certificado encontrada.')
+            return
+
+        self.stdout.write(f'[INFO] Processando {empresas_com_certificado.count()} empresa(s) com certificado.')
+
+        for empresa in empresas_com_certificado:
+            self.stdout.write(f'[PROCESSANDO] Empresa: {empresa.razao_social}')
 
             cert_path = empresa.file.path
             if not os.path.isfile(cert_path):
                 self.stderr.write(f'[ERRO] Certificado não encontrado: {cert_path}')
                 continue
-            else:
-                self.stdout.write(f'[OK] Certificado encontrado: {cert_path}')
 
             try:
                 # Pega último NSU do banco ou usa 0 se não houver
@@ -45,8 +50,13 @@ class Command(BaseCommand):
                     self.stderr.write(f'[WARN] Erro ao buscar NSU anterior: {e}')
                     nsu_para_consulta = 0
 
+                self.stdout.write(f'[INFO] Consultando SEFAZ para NSU: {nsu_para_consulta}')
+
                 con = ComunicacaoSefaz(empresa.uf, cert_path, empresa.senha, homologacao=False)
-                self.stdout.write(f"XML enviado: {con.ultimo_xml_enviado.decode('utf-8') if hasattr(con, 'ultimo_xml_enviado') else 'Sem XML disponível'}")
+
+                # Log do XML enviado (se disponível)
+                if hasattr(con, 'ultimo_xml_enviado') and con.ultimo_xml_enviado:
+                    self.stdout.write(f"[DEBUG] XML enviado: {con.ultimo_xml_enviado.decode('utf-8')}")
 
                 response = con.consulta_distribuicao(
                     cnpj=sub(r'\D', '', empresa.documento),
@@ -57,7 +67,8 @@ class Command(BaseCommand):
 
                 if not response or not response.text.startswith('<'):
                     self.stderr.write(f'[ERRO] Resposta inválida para {empresa.razao_social}')
-                    print(f"Resposta completa:\n{response.text}")
+                    if response:
+                        self.stderr.write(f"[DEBUG] Resposta: {response.text[:500]}...")
                     continue
 
                 xml = response.text
@@ -72,6 +83,8 @@ class Command(BaseCommand):
                     continue
 
                 documentos = resposta.xpath('//ns:retDistDFeInt/ns:loteDistDFeInt/ns:docZip', namespaces=ns)
+                self.stdout.write(f'[INFO] Encontrados {len(documentos)} documento(s) para processar.')
+
                 for doc in documentos:
                     tipo_schema = doc.attrib.get('schema')
                     numero_nsu = doc.attrib.get('NSU')
@@ -127,19 +140,24 @@ class Command(BaseCommand):
                     relative_path = os.path.join('xml', filename)
                     self.stdout.write(f'[SALVO] Documento {numero_nsu} salvo em {relative_path}')
 
-                    if tipo_documento == "nfe_nsu":
-                        processor = NFeProcessor(empresa, numero_nsu, relative_path)
-                        processor.processar(debug=False)
-                        self.stdout.write(f'[OK] Documento {numero_nsu} processado')
+                    try:
+                        if tipo_documento == "nfe_nsu":
+                            processor = NFeProcessor(empresa, numero_nsu, relative_path)
+                            processor.processar(debug=False)
+                            self.stdout.write(f'[OK] Documento {numero_nsu} processado')
 
-                    elif tipo_documento == "resumo_nsu":
-                        processor = ResumoNFeProcessor(empresa, numero_nsu, relative_path)
-                        processor.processar()
-                        self.stdout.write(f'[OK] Resumo {numero_nsu} processado')
-                    else:
-                        processor = EventoNFeProcessor(empresa, numero_nsu, relative_path)
-                        processor.processar()
-                        self.stdout.write(f'[OK] Evento {numero_nsu} processado')
+                        elif tipo_documento == "resumo_nsu":
+                            processor = ResumoNFeProcessor(empresa, numero_nsu, relative_path)
+                            processor.processar()
+                            self.stdout.write(f'[OK] Resumo {numero_nsu} processado')
+                        else:
+                            processor = EventoNFeProcessor(empresa, numero_nsu, relative_path)
+                            processor.processar()
+                            self.stdout.write(f'[OK] Evento {numero_nsu} processado')
+
+                    except Exception as e:
+                        self.stderr.write(f'[ERRO] Falha ao processar documento {numero_nsu}: {str(e)}')
+                        continue
 
                 # Atualiza NSU no banco somente se resposta for válida
                 if cStat == "138":

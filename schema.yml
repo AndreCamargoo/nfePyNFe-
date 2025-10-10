@@ -1969,6 +1969,112 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/nfes/processar-lote/:
+    post:
+      operationId: processar_lote_nfe
+      description: "\n        Processa um lote de arquivos XML de NFe, Eventos e Resumos\
+        \ contidos em um arquivo ZIP.\n\n        ## Funcionalidades\n        - Processa\
+        \ automaticamente diferentes tipos de XML (NFe, Eventos, Resumos)\n      \
+        \  - Atualiza o NSU (Número Sequencial Único) da empresa\n        - Retorna\
+        \ estatísticas detalhadas do processamento\n\n        ## Tipos de XML Suportados\n\
+        \        - **nfeProc**: Notas Fiscais Eletrônicas\n        - **procEventoNFe**:\
+        \ Eventos de NFe (cancelamentos, correções, etc.)\n        - **resNFe/resEvento**:\
+        \ Resumos de NFe e Eventos\n\n        ## Fluxo de Processamento\n        1.\
+        \ Validação dos dados de entrada\n        2. Verificação de permissões da\
+        \ empresa\n        3. Extração do arquivo ZIP\n        4. Processamento de\
+        \ cada XML individualmente\n        5. Roteamento para o processador específico\n\
+        \        6. Retorno dos resultados consolidados\n        "
+      summary: Processar lote de NFe
+      tags:
+      - '[Allnube] NF'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                empresa_id:
+                  type: integer
+                  description: ID da empresa que está processando o lote
+                  example: 3
+                arquivo_zip:
+                  type: string
+                  format: binary
+                  description: Arquivo ZIP contendo os XMLs a serem processados
+              required:
+              - empresa_id
+              - arquivo_zip
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Sucesso:
+                  value:
+                    mensagem: Processamento concluído com sucesso
+                    resultados:
+                      nfe_processadas: 5
+                      eventos_processados: 2
+                      resumos_processados: 3
+                      erros: []
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                EmpresaObrigatória:
+                  value:
+                    error: empresa_id é obrigatório
+                  summary: Empresa obrigatória
+                ArquivoObrigatório:
+                  value:
+                    error: arquivo_zip é obrigatório
+                  summary: Arquivo obrigatório
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                EmpresaNãoAutorizada:
+                  value:
+                    error: Empresa não autorizada para processamento em lote
+                  summary: Empresa não autorizada
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                EmpresaNãoEncontrada:
+                  value:
+                    error: Empresa com ID 999 não encontrada
+                  summary: Empresa não encontrada
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ErroInterno:
+                  value:
+                    error: Erro interno no processamento do lote
+                  summary: Erro interno
+          description: ''
   /api/v1/nfes/matriz/:
     get:
       operationId: 02_listar_notas_fiscais_matriz

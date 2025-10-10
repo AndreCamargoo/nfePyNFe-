@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiExample, OpenApiResponse
 import os
 from pathlib import Path
 
@@ -382,21 +383,134 @@ class NfeListCreateAPIView(NFeBaseView, generics.ListCreateAPIView):
             return response.Response({'error': f'Ocorreu um erro inesperado: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema_view(
+    post=extend_schema(
+        tags=["[Allnube] NF"],
+        operation_id="02_processar_lote_nfe",
+        summary='02 Processar lote de NFe',
+        description="""
+        Processa um lote de arquivos XML de NFe, Eventos e Resumos contidos em um arquivo ZIP.
+
+        ## Funcionalidades
+        - Processa automaticamente diferentes tipos de XML (NFe, Eventos, Resumos)
+        - Atualiza o NSU (Número Sequencial Único) da empresa
+        - Retorna estatísticas detalhadas do processamento
+
+        ## Tipos de XML Suportados
+        - **nfeProc**: Notas Fiscais Eletrônicas
+        - **procEventoNFe**: Eventos de NFe (cancelamentos, correções, etc.)
+        - **resNFe/resEvento**: Resumos de NFe e Eventos
+
+        ## Fluxo de Processamento
+        1. Validação dos dados de entrada
+        2. Verificação de permissões da empresa
+        3. Extração do arquivo ZIP
+        4. Processamento de cada XML individualmente
+        5. Roteamento para o processador específico
+        6. Retorno dos resultados consolidados
+        """,
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'empresa_id': {
+                        'type': 'integer',
+                        'description': 'ID da empresa que está processando o lote',
+                        'example': 3
+                    },
+                    'arquivo_zip': {
+                        'type': 'string',
+                        'format': 'binary',
+                        'description': 'Arquivo ZIP contendo os XMLs a serem processados'
+                    }
+                },
+                'required': ['empresa_id', 'arquivo_zip']
+            }
+        },
+        responses={
+            201: OpenApiTypes.OBJECT,
+            400: OpenApiTypes.OBJECT,
+            403: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+            500: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Sucesso',
+                value={
+                    'mensagem': 'Processamento concluído com sucesso',
+                    'resultados': {
+                        'nfe_processadas': 5,
+                        'eventos_processados': 2,
+                        'resumos_processados': 3,
+                        'erros': []
+                    }
+                },
+                response_only=True,
+                status_codes=['201']
+            ),
+            OpenApiExample(
+                'Empresa obrigatória',
+                value={'error': 'empresa_id é obrigatório'},
+                response_only=True,
+                status_codes=['400']
+            ),
+            OpenApiExample(
+                'Arquivo obrigatório',
+                value={'error': 'arquivo_zip é obrigatório'},
+                response_only=True,
+                status_codes=['400']
+            ),
+            OpenApiExample(
+                'Empresa não encontrada',
+                value={'error': 'Empresa com ID 999 não encontrada'},
+                response_only=True,
+                status_codes=['404']
+            ),
+            OpenApiExample(
+                'Empresa não autorizada',
+                value={'error': 'Empresa não autorizada para processamento em lote'},
+                response_only=True,
+                status_codes=['403']
+            ),
+            OpenApiExample(
+                'Erro interno',
+                value={'error': 'Erro interno no processamento do lote'},
+                response_only=True,
+                status_codes=['500']
+            ),
+        ]
+    )
+)
 class ProcessarLoteNFeAPIView(APIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
 
     def post(self, request, *args, **kwargs):
         try:
             empresa_id = request.data.get('empresa_id')
             arquivo_zip = request.FILES.get('arquivo_zip')
 
-            if not empresa_id or not arquivo_zip:
+            # Validação dos campos obrigatórios
+            if not empresa_id:
                 return response.Response(
-                    {'error': 'empresa_id e arquivo_zip são obrigatórios'},
+                    {'error': 'empresa_id é obrigatório'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            if not arquivo_zip:
+                return response.Response(
+                    {'error': 'arquivo_zip é obrigatório'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Busca e validação da empresa
             empresa = Empresa.objects.get(pk=empresa_id)
+
+            if empresa.sistema != 3:
+                return response.Response(
+                    {'error': 'Empresa não autorizada para processamento em lote'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
             # Pegar o último NSU
             historyNsu = HistoricoNSU.objects.filter(empresa=empresa).order_by('-id').first()
@@ -406,39 +520,147 @@ class ProcessarLoteNFeAPIView(APIView):
             resultados = NFeLoteProcessor(empresa, nsu_inicial, arquivo_zip).processar_zip()
 
             return response.Response({
-                'mensagem': 'Processamento concluído',
+                'mensagem': 'Processamento concluído com sucesso',
                 'resultados': resultados
             }, status=status.HTTP_201_CREATED)
 
         except Empresa.DoesNotExist:
-            return response.Response({'error': 'Empresa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response(
+                {'error': f'Empresa com ID {empresa_id} não encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValidationError as e:
+            return response.Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
-            return response.Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return response.Response(
+                {'error': 'Erro interno no processamento do lote'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["[Allnube] NF"],
+        operation_id='03_gerar_danfe',
+        summary='03 Gerar DANFE',
+        description="""
+        Gera o Documento Auxiliar da Nota Fiscal Eletrônica (DANFE) em formato PDF a partir do XML da NFe.
+
+        ## Funcionalidades
+        - Gera PDF da DANFE a partir do XML da nota fiscal
+        - Verifica se o PDF já foi gerado anteriormente (evita reprocessamento)
+        - Valida se a nota fiscal pertence à empresa do usuário logado
+        - Salva o PDF gerado no sistema de arquivos
+        - Atualiza o registro da nota fiscal com o caminho do PDF
+
+        ## Fluxo de Processamento
+        1. Busca a nota fiscal pelo ID
+        2. Valida se a nota pertence à empresa do usuário logado
+        3. Verifica se o XML existe
+        4. Checa se o PDF já foi gerado anteriormente
+        5. Gera o PDF usando a biblioteca Danfe
+        6. Salva o caminho do PDF no registro da nota
+        7. Retorna a URL para download do PDF
+
+        ## Requisitos
+        - O XML da nota fiscal deve estar salvo no sistema
+        - A nota fiscal deve pertencer à empresa do usuário logado
+        - A biblioteca Danfe deve estar instalada e configurada
+        """,
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='DANFE gerado com sucesso ou já existente',
+                examples=[
+                    OpenApiExample(
+                        'DANFE gerado com sucesso',
+                        value={
+                            'message': 'DANFE gerado com sucesso!',
+                            'pdf_path': 'https://exemplo.com/media/danfe/NFe123456789.pdf'
+                        }
+                    ),
+                    OpenApiExample(
+                        'DANFE já existente',
+                        value={
+                            'message': 'DANFE já gerado anteriormente.',
+                            'pdf_path': 'https://exemplo.com/media/danfe/NFe123456789.pdf'
+                        }
+                    )
+                ]
+            ),
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Erro na requisição',
+                examples=[
+                    OpenApiExample(
+                        'XML não encontrado',
+                        value={'error': 'Arquivo XML não encontrado.'}
+                    ),
+                    OpenApiExample(
+                        'Arquivo XML não encontrado no sistema',
+                        value={'error': 'Arquivo XML não encontrado no caminho: /media/xml/NFe123456789.xml'}
+                    )
+                ]
+            ),
+            403: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Acesso não autorizado',
+                examples=[
+                    OpenApiExample(
+                        'Nota não pertence à empresa do usuário',
+                        value={'error': 'Você não tem permissão para acessar esta nota fiscal.'}
+                    )
+                ]
+            ),
+            404: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Nota fiscal não encontrada',
+                examples=[
+                    OpenApiExample(
+                        'Nota não encontrada',
+                        value={'detail': 'Não encontrado.'}
+                    )
+                ]
+            ),
+            500: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Erro interno no processamento',
+                examples=[
+                    OpenApiExample(
+                        'Erro na geração do PDF',
+                        value={'error': 'Erro durante a geração do DANFE: [detalhes do erro]'}
+                    )
+                ]
+            )
+        }
+    )
+)
 class GerarDanfeAPIView(generics.RetrieveAPIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
     queryset = models.NotaFiscal.objects.all()
 
-    @staticmethod
-    def _gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe'):
-        """Gera e salva o PDF da DANFE a partir do XML."""
-        if not os.path.exists(pasta_saida):
-            os.makedirs(pasta_saida)
-
-        with open(xml_file_path, "r", encoding="utf8") as file:
-            xml_content = file.read()
-
-        nome_base = os.path.splitext(os.path.basename(xml_file_path))[0]
-        caminho_pdf = os.path.join(pasta_saida, f'{nome_base}.pdf')
-
-        danfe = Danfe(xml=xml_content)
-        danfe.output(caminho_pdf)
-
-        return caminho_pdf
-
     def get(self, request, *args, **kwargs):
+        """
+        Endpoint para gerar ou recuperar o DANFE de uma nota fiscal.
+
+        Parâmetros:
+        - pk (int): ID da nota fiscal no sistema
+
+        Retorna:
+        - URL do PDF gerado ou existente
+        - Mensagem de status do processamento
+        """
         nota_fiscal = self.get_object()
+
+        # Valida se a nota fiscal pertence à empresa do usuário logado
+        if not self._validar_empresa_usuario(nota_fiscal, request.user):
+            return response.Response(
+                {'error': 'Você não tem permissão para acessar esta nota fiscal.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         if not nota_fiscal.fileXml:
             return response.Response(
@@ -483,16 +705,86 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
 
         except Exception as e:
             return response.Response(
-                {'error': str(e)},
+                {'error': f'Erro durante a geração do DANFE: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def _validar_empresa_usuario(self, nota_fiscal, usuario):
+        """
+        Valida se a nota fiscal pertence à empresa do usuário logado.
+
+        Baseado nos modelos:
+        - NotaFiscal tem campo 'empresa' (ForeignKey para Empresa)
+        - Empresa tem campo 'usuario' (ForeignKey para User)
+        - Funcionario relaciona User com Empresa (N:N através do model Funcionario)
+
+        Args:
+            nota_fiscal (NotaFiscal): Instância da nota fiscal
+            usuario (User): Usuário logado
+
+        Returns:
+            bool: True se a nota pertence à empresa do usuário, False caso contrário
+        """
+        try:
+            # Verifica se o usuário é dono direto da empresa da nota fiscal
+            if nota_fiscal.empresa.usuario == usuario:
+                return True
+
+            # Verifica se o usuário é funcionário da empresa da nota fiscal
+            funcionario_exists = Funcionario.objects.filter(
+                user=usuario,
+                empresa=nota_fiscal.empresa,
+                status='1'  # Ativo
+            ).exists()
+
+            if funcionario_exists:
+                return True
+
+            # Verifica se o usuário é superusuário/staff (acesso total)
+            if usuario.is_superuser or usuario.is_staff:
+                return True
+
+            return False
+
+        except (AttributeError, Empresa.DoesNotExist, Funcionario.DoesNotExist):
+            return False
+
+    @staticmethod
+    def _gerar_danfe_pdf(xml_file_path, pasta_saida='media/danfe'):
+        """
+        Gera e salva o PDF da DANFE a partir do XML.
+
+        Args:
+            xml_file_path (str): Caminho completo para o arquivo XML
+            pasta_saida (str): Pasta onde o PDF será salvo (relativo a MEDIA_ROOT)
+
+        Returns:
+            str: Caminho completo do PDF gerado
+
+        Raises:
+            FileNotFoundError: Se o arquivo XML não for encontrado
+            Exception: Em caso de erro na geração do PDF
+        """
+        if not os.path.exists(pasta_saida):
+            os.makedirs(pasta_saida)
+
+        with open(xml_file_path, "r", encoding="utf8") as file:
+            xml_content = file.read()
+
+        nome_base = os.path.splitext(os.path.basename(xml_file_path))[0]
+        caminho_pdf = os.path.join(pasta_saida, f'{nome_base}.pdf')
+
+        danfe = Danfe(xml=xml_content)
+        danfe.output(caminho_pdf)
+
+        return caminho_pdf
 
 
 @extend_schema_view(
     get=extend_schema(
         tags=["[Allnube] NF"],
-        operation_id="02_listar_notas_fiscais_matriz",
-        summary="02 Listar notas fiscais da matriz",
+        operation_id="04_listar_notas_fiscais_matriz",
+        summary="04 Listar notas fiscais da matriz",
         description="""
         Retorna todas as notas fiscais da matriz do usuário autenticado.
         
@@ -638,8 +930,8 @@ class NfeListMatrizAPIView(generics.ListAPIView):
 @extend_schema_view(
     get=extend_schema(
         tags=["[Allnube] NF"],
-        operation_id="03_listar_notas_fiscais_filial",
-        summary="03 Listar notas fiscais por filial",
+        operation_id="05_listar_notas_fiscais_filial",
+        summary="05 Listar notas fiscais por filial",
         description="""
         Retorna notas fiscais de uma filial específica através do documento (CNPJ).
         
@@ -798,7 +1090,6 @@ class NfeListFilialAPIView(generics.ListAPIView):
         matriz_id = utils.obter_matriz_funcionario(user)
 
         if not documento:
-            # CORREÇÃO: Usar ValidationError em vez de Exception genérica
             raise ValidationError({'documento': 'Documento é obrigatório'})
 
         getFilial = Empresa.objects.filter(
@@ -826,8 +1117,8 @@ class NfeListFilialAPIView(generics.ListAPIView):
 @extend_schema_view(
     get=extend_schema(
         tags=["[Allnube] NF"],
-        operation_id="04_obter_nota_fiscal",
-        summary="04 Obter detalhes de uma nota fiscal",
+        operation_id="06_obter_nota_fiscal",
+        summary="06 Obter detalhes de uma nota fiscal",
         description="""
         Retorna os detalhes completos de uma nota fiscal específica.
         
@@ -2348,11 +2639,9 @@ class NfeFornecedorRetrieveAPIView(generics.RetrieveAPIView):
         matriz_id = utils.obter_matriz_funcionario(user)
 
         if not matriz_id:
-            # CORREÇÃO: Retornar Emitente.objects.none() em vez de Produto.objects.none()
             return models.Emitente.objects.none()
 
         # Filtra emitentes pela empresa da matriz ou suas filiais
-        # CORREÇÃO: Adicionar filtro para notas não deletadas
         return models.Emitente.objects.filter(
             Q(nota_fiscal__empresa=matriz_id) |
             Q(nota_fiscal__empresa__matriz_filial=matriz_id),

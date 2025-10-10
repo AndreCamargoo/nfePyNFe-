@@ -35,7 +35,7 @@ def remove_specific_paths(endpoints, **kwargs):
         'GrupoRotaSistemaListCreateAPIView', 'GrupoRotaSistemaRetrieveUpdateDestroyAPIView',
 
         # Notas fiscais completas
-        'NfeListCreateAPIView', 'NfeListMatrizAPIView', 'NfeListFilialAPIView', 'NfeRetrieveUpdateDestroyAPIView',
+        'NfeListCreateAPIView', 'ProcessarLoteNFeAPIView', 'GerarDanfeAPIView', 'NfeListMatrizAPIView', 'NfeListFilialAPIView', 'NfeRetrieveUpdateDestroyAPIView',
 
         # Notas fisica (produtos)
         'NfeTodosProdutosListAPIView', 'NfeProdutosMatrizListAPIView', 'NfeProdutosFilialListAPIView', 'NfeProdutoRetrieveAPIView',
