@@ -17,7 +17,7 @@ from rest_framework.exceptions import PermissionDenied, NotFound, ValidationErro
 from rest_framework.views import APIView
 
 from . import models
-from . import utils
+from app.utils import utils
 
 from empresa.models import (
     Empresa, HistoricoNSU, Funcionario
@@ -72,6 +72,12 @@ class NFeBaseView:
                                "O acesso a esta funcionalidade foi bloqueado."
                     )
 
+                verificaEmpresa = utils.verificaRestricaoAdministrativa(empresa.id, 3)
+                if not verificaEmpresa:
+                    raise PermissionDenied(
+                        detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                    )
+
                 # Funcionário ativo + empresa / filial ativa → retorna notas
                 return models.NotaFiscal.objects.filter(
                     Q(empresa_id=empresa.id) |  # Notas da matriz
@@ -82,7 +88,19 @@ class NFeBaseView:
         except PermissionDenied:
             raise  # Repassa a exceção corretamente
         except Exception:
-            return Empresa.objects.none()
+            return models.NotaFiscal.objects.none()
+
+        empresa_usuario = Empresa.objects.filter(usuario=user, sistema=3).first()
+
+        if not empresa_usuario:
+            return models.NotaFiscal.objects.none()
+
+        # Verifica restrição administrativa para cada empresa do usuário
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(empresa_usuario.id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         return models.NotaFiscal.objects.filter(
             Q(empresa__usuario=user) |  # Matrizes do usuário
@@ -512,6 +530,12 @@ class ProcessarLoteNFeAPIView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(empresa.id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
+
             # Pegar o último NSU
             historyNsu = HistoricoNSU.objects.filter(empresa=empresa).order_by('-id').first()
             nsu_inicial = historyNsu.nsu if historyNsu else 0
@@ -654,6 +678,12 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
         - Mensagem de status do processamento
         """
         nota_fiscal = self.get_object()
+
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(nota_fiscal.empresa, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         # Valida se a nota fiscal pertence à empresa do usuário logado
         if not self._validar_empresa_usuario(nota_fiscal, request.user):
@@ -916,6 +946,12 @@ class NfeListMatrizAPIView(generics.ListAPIView):
         user = self.request.user
         matriz_id = utils.obter_matriz_funcionario(user)
 
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
+
         nfe = models.NotaFiscal.objects.filter(
             empresa=matriz_id,
             deleted_at__isnull=True,
@@ -1088,6 +1124,12 @@ class NfeListFilialAPIView(generics.ListAPIView):
         user = self.request.user
         documento = self.kwargs.get('documento', None)
         matriz_id = utils.obter_matriz_funcionario(user)
+
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         if not documento:
             raise ValidationError({'documento': 'Documento é obrigatório'})
@@ -1435,6 +1477,12 @@ class NfeTodosProdutosListAPIView(generics.ListAPIView):
         user = self.request.user
         matriz_id = utils.obter_matriz_funcionario(user)
 
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
+
         if not matriz_id:
             return models.Produto.objects.none()
 
@@ -1577,6 +1625,12 @@ class NfeProdutosMatrizListAPIView(generics.ListAPIView):
 
         user = self.request.user
         matriz_id = utils.obter_matriz_funcionario(user)
+
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         if not matriz_id:
             return models.Produto.objects.none()
@@ -1741,6 +1795,12 @@ class NfeProdutosFilialListAPIView(generics.ListAPIView):
         user = self.request.user
         documento = self.kwargs.get('documento', None)
         matriz_id = utils.obter_matriz_funcionario(user)
+
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         if not documento:
             raise ValidationError({'documento': 'Documento é obrigatório'})
@@ -1936,6 +1996,12 @@ class NfeProdutoRetrieveAPIView(generics.RetrieveAPIView):
         user = self.request.user
         matriz_id = utils.obter_matriz_funcionario(user)
 
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
+
         if not matriz_id:
             # Retorna queryset vazio se não encontrar empresa
             return models.Produto.objects.none()
@@ -2108,7 +2174,7 @@ class NfeProdutoRetrieveAPIView(generics.RetrieveAPIView):
     )
 )
 class NfeTodosFornecedorListAPIView(generics.ListAPIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
     serializer_class = EmitenteModelSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = FornecedorFilter
@@ -2121,6 +2187,12 @@ class NfeTodosFornecedorListAPIView(generics.ListAPIView):
 
         user = self.request.user
         matriz_id = utils.obter_matriz_funcionario(user)
+
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         if not matriz_id:
             return models.Emitente.objects.none()
@@ -2277,6 +2349,12 @@ class NfeFornecedorMatrizListAPIView(generics.ListAPIView):
 
         user = self.request.user
         matriz_id = utils.obter_matriz_funcionario(user)
+
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         if not matriz_id:
             # Retorna queryset vazio se não encontrar empresa
@@ -2459,6 +2537,12 @@ class NfeFornecedorFilialListAPIView(generics.ListAPIView):
         documento = self.kwargs.get('documento', None)
         matriz_id = utils.obter_matriz_funcionario(user)
 
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
+
         if not documento:
             raise ValidationError({'documento': 'Documento é obrigatório'})
 
@@ -2637,6 +2721,12 @@ class NfeFornecedorRetrieveAPIView(generics.RetrieveAPIView):
 
         user = self.request.user
         matriz_id = utils.obter_matriz_funcionario(user)
+
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+        if not verificaEmpresa:
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+            )
 
         if not matriz_id:
             return models.Emitente.objects.none()

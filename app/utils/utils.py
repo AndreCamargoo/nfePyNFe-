@@ -1,8 +1,11 @@
-from empresa.models import Funcionario, Empresa
+
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import PermissionDenied
 
 from django.shortcuts import get_object_or_404
-from .models import Empresa
+
+from empresa.models import Funcionario, Empresa
+from sistema.models import EmpresaSistema
 
 
 class CustomPageSizePagination(PageNumberPagination):
@@ -24,6 +27,19 @@ def get_empresas_filtradas(user, documento):
         empresas_filtradas = Empresa.objects.filter(pk=minha_empresa.id)
 
     return empresas_filtradas
+
+
+def verificaRestricaoAdministrativa(empresa_id, sistema_id):
+    restricaoAdministrativa = EmpresaSistema.objects.filter(
+        empresa=empresa_id,
+        sistema=sistema_id,
+        ativo=False
+    ).exists()
+
+    if restricaoAdministrativa:
+        return False
+
+    return True
 
 
 def obter_matriz_funcionario(user):
