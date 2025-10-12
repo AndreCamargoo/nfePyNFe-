@@ -129,6 +129,9 @@ INSTALLED_APPS = [
     'empresa',
     'apexcharts',
     'sistema',
+
+    # App para controlar migracoes de banco empresas
+    'db_allnube_empresa',
 ]
 
 MIDDLEWARE = [
@@ -162,6 +165,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'app.wsgi.application'
 
 # ==================== DATABASE ====================
+
+"""
+ Quando configurado, direciona automaticamente as queries para o banco correto baseado no modelo sendo acessado.
+"""
+DATABASE_ROUTERS = []
+
+"""
+Permite controle sobre onde as migrações são aplicadas
+"""
+MIGRATION_MODULES = {
+    'db_allnube_empresa': 'db_allnube_empresa.migrations',
+}
 
 DATABASES = {
     'default': {
