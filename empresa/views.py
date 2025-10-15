@@ -331,7 +331,8 @@ class ConexaoBancoListCreateAPIView(generics.ListCreateAPIView):
             ConexaoBanco.objects.filter(
                 empresa__usuario=user,
                 empresa__status='1',
-                empresa__matriz_filial__isnull=True
+                empresa__matriz_filial__isnull=True,
+                status=True
             ).first()
         )
 

@@ -1,4 +1,11 @@
 from django.db import models
+from django.conf import settings
+
+
+class FlatBaseManager(models.Manager):
+    def get_queryset(self):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        return super().get_queryset().using(db_alias)
 
 
 class NotaFiscalFlat(models.Model):
@@ -14,6 +21,8 @@ class NotaFiscalFlat(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(blank=True, null=True)
 
+    objects = FlatBaseManager()
+
     class Meta:
         db_table = 'nfe_notafiscal_flat'
         verbose_name = 'Nota Fiscal (Flat)'
@@ -22,6 +31,11 @@ class NotaFiscalFlat(models.Model):
 
     def __str__(self):
         return f"NF-e {self.chave}"
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
 
 
 class IdeFlat(models.Model):
@@ -44,6 +58,8 @@ class IdeFlat(models.Model):
     procEmi = models.IntegerField(null=True, blank=True)
     verProc = models.CharField(max_length=20, null=True, blank=True)
 
+    objects = FlatBaseManager()
+
     class Meta:
         db_table = 'nfe_ide_flat'
         verbose_name = 'IDE (Flat)'
@@ -52,6 +68,11 @@ class IdeFlat(models.Model):
 
     def __str__(self):
         return f"Serie {self.serie}"
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
 
 
 class EmitenteFlat(models.Model):
@@ -72,6 +93,8 @@ class EmitenteFlat(models.Model):
     xPais = models.CharField(max_length=50, null=True, blank=True)
     fone = models.CharField(max_length=15, blank=True, null=True)
 
+    objects = FlatBaseManager()
+
     class Meta:
         db_table = 'nfe_emitente_flat'
         verbose_name = 'Emitente (Flat)'
@@ -80,6 +103,11 @@ class EmitenteFlat(models.Model):
 
     def __str__(self):
         return f"{self.xNome} - {self.xFant}"
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
 
 
 class DestinatarioFlat(models.Model):
@@ -99,6 +127,8 @@ class DestinatarioFlat(models.Model):
     cPais = models.CharField(max_length=4, null=True, blank=True)
     xPais = models.CharField(max_length=50, null=True, blank=True)
 
+    objects = FlatBaseManager()
+
     class Meta:
         db_table = 'nfe_destinatario_flat'
         verbose_name = 'Destinatario (Flat)'
@@ -107,6 +137,11 @@ class DestinatarioFlat(models.Model):
 
     def __str__(self):
         return f"{self.xNome} - {self.xMun}"
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
 
 
 class ProdutoFlat(models.Model):
@@ -126,6 +161,8 @@ class ProdutoFlat(models.Model):
     vUnTrib = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
     indTot = models.IntegerField()
 
+    objects = FlatBaseManager()
+
     class Meta:
         db_table = 'nfe_produto_flat'
         verbose_name = 'Produto (Flat)'
@@ -134,6 +171,11 @@ class ProdutoFlat(models.Model):
 
     def __str__(self):
         return f"{self.nItem} - {self.xProd}"
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
 
 
 class ImpostoFlat(models.Model):
@@ -145,6 +187,8 @@ class ImpostoFlat(models.Model):
     vPIS = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     vCOFINS = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
 
+    objects = FlatBaseManager()
+
     class Meta:
         db_table = 'nfe_imposto_flat'
         verbose_name = 'Imposto (Flat)'
@@ -153,6 +197,11 @@ class ImpostoFlat(models.Model):
 
     def __str__(self):
         return f"Imposto - {self.vTotTrib}"
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
 
 
 class TotalFlat(models.Model):
@@ -178,6 +227,8 @@ class TotalFlat(models.Model):
     vNF = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     vTotTrib = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    objects = FlatBaseManager()
+
     class Meta:
         db_table = 'nfe_total_flat'
         verbose_name = 'Total (Flat)'
@@ -187,11 +238,18 @@ class TotalFlat(models.Model):
     def __str__(self):
         return f"Total - {self.vNF}"
 
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
+
 
 class TransporteFlat(models.Model):
     nota_fiscal_id = models.IntegerField()
     modFrete = models.IntegerField(null=True, blank=True)
     qVol = models.IntegerField(blank=True, null=True)
+
+    objects = FlatBaseManager()
 
     class Meta:
         db_table = 'nfe_transporte_flat'
@@ -202,6 +260,11 @@ class TransporteFlat(models.Model):
     def __str__(self):
         return f"Transporte - {self.modFrete}"
 
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
+
 
 class CobrancaFlat(models.Model):
     nota_fiscal_id = models.IntegerField()
@@ -209,6 +272,8 @@ class CobrancaFlat(models.Model):
     vOrig = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     vDesc = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     vLiq = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    objects = FlatBaseManager()
 
     class Meta:
         db_table = 'nfe_cobranca_flat'
@@ -219,6 +284,11 @@ class CobrancaFlat(models.Model):
     def __str__(self):
         return f"Cobrança - {self.nFat}"
 
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
+
 
 class PagamentoFlat(models.Model):
     cobranca_id = models.IntegerField()
@@ -226,6 +296,8 @@ class PagamentoFlat(models.Model):
     tPag = models.IntegerField(null=True, blank=True)
     vPag = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     tpIntegra = models.IntegerField(blank=True, null=True)
+
+    objects = FlatBaseManager()
 
     class Meta:
         db_table = 'nfe_pagamento_flat'
@@ -235,3 +307,8 @@ class PagamentoFlat(models.Model):
 
     def __str__(self):
         return f"Pagamento - {self.tPag}"
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)

@@ -105,6 +105,7 @@ class ConexaoBanco(models.Model):
     _database = models.BinaryField(db_column='database')
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
+    status = models.BooleanField(default=True)
 
     def __str__(self):
         return f'Conexão - {self.empresa.razao_social}'

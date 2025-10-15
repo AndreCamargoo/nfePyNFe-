@@ -39,6 +39,13 @@ from app.permissions import PodeAcessarRotasFuncionario
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
+from db_allnube_empresa.models import NotaFiscalFlat
+from db_allnube_empresa.utils.database_utils import DatabaseManager
+from db_allnube_empresa.filters import (
+    NotaFiscalFilterFlat
+)
+from db_allnube_empresa.serializer import NfeFlatSerializer, NfeFlatModelSerializer
+
 
 class NFeBaseView:
     """Classe base com configurações comuns"""
@@ -46,13 +53,10 @@ class NFeBaseView:
     def get_permissions(self):
         return [IsAuthenticated(), PodeAcessarRotasFuncionario()]
 
-    def get_queryset(self):
-        # Evita erro na geração da documentação Swagger
-        if getattr(self, 'swagger_fake_view', False):
-            return models.NotaFiscal.objects.none()
-
-        user = self.request.user
-
+    def _get_empresa_usuario(self, user):
+        """
+        Obtém a empresa principal do usuário
+        """
         try:
             # Verifica se é funcionário ativo
             funcionario = Funcionario.objects.filter(
@@ -63,51 +67,82 @@ class NFeBaseView:
             ).select_related('empresa').first()
 
             if funcionario:
-                empresa = funcionario.empresa
+                return funcionario.empresa
 
-                # Verifica se a empresa ainda está ativa
-                if empresa.status != '1':
-                    raise PermissionDenied(
-                        detail="A empresa vinculada à sua conta está inativa. "
-                               "O acesso a esta funcionalidade foi bloqueado."
-                    )
+            # Se não for funcionário, busca empresa do usuário
+            return Empresa.objects.filter(usuario=user, sistema=3).first()
 
-                verificaEmpresa = utils.verificaRestricaoAdministrativa(empresa.id, 3)
-                if not verificaEmpresa:
-                    raise PermissionDenied(
-                        detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-                    )
-
-                # Funcionário ativo + empresa / filial ativa → retorna notas
-                return models.NotaFiscal.objects.filter(
-                    Q(empresa_id=empresa.id) |  # Notas da matriz
-                    Q(empresa__matriz_filial_id=empresa.id),  # Notas das filiais
-                    deleted_at__isnull=True
-                ).order_by('-dhEmi')
-
-        except PermissionDenied:
-            raise  # Repassa a exceção corretamente
         except Exception:
-            return models.NotaFiscal.objects.none()
+            return None
 
-        empresa_usuario = Empresa.objects.filter(usuario=user, sistema=3).first()
+    def _verificar_restricoes_empresa(self, empresa):
+        """
+        Verifica se a empresa está ativa e sem restrições
+        """
+        if not empresa or empresa.status != '1':
+            raise PermissionDenied(
+                detail="A empresa vinculada à sua conta está inativa. "
+                       "O acesso a esta funcionalidade foi bloqueado."
+            )
 
-        if not empresa_usuario:
-            return models.NotaFiscal.objects.none()
-
-        # Verifica restrição administrativa para cada empresa do usuário
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(empresa_usuario.id, 3)
+        verificaEmpresa = utils.verificaRestricaoAdministrativa(empresa.id, 3)
         if not verificaEmpresa:
             raise PermissionDenied(
                 detail="A empresa vinculada à sua conta está desativada, contate um administrador."
             )
 
+        return True
+
+    def _get_queryset_banco_default(self, empresa):
+        """
+        Retorna o queryset do banco DEFAULT (modelos normais)
+        """
+
+        # Funcionário ativo + empresa / filial ativa → retorna notas
         return models.NotaFiscal.objects.filter(
-            Q(empresa__usuario=user) |  # Matrizes do usuário
-            Q(empresa__matriz_filial__usuario=user),  # Filiais de matrizes do usuário
-            deleted_at__isnull=True,
-            empresa__sistema=3
+            Q(empresa_id=empresa.id) |  # Notas da matriz
+            Q(empresa__matriz_filial_id=empresa.id),  # Notas das filiais
+            deleted_at__isnull=True
         ).order_by('-dhEmi')
+
+    def _get_queryset_banco_empresa(self, empresa):
+        """
+        Retorna o queryset do banco da EMPRESA (modelos flat)
+        """
+        # Configura e usa o banco da empresa
+        if DatabaseManager.usar_banco_empresa(empresa.id):
+            # Agora as queries vão para o banco da empresa
+            return NotaFiscalFlat.objects.filter(
+                empresa_id=empresa.id,
+                deleted_at__isnull=True
+            ).order_by('-dhEmi')
+        else:
+            # Se não conseguiu conectar no banco da empresa, retorna vazio
+            return NotaFiscalFlat.objects.none()
+
+    def get_queryset(self):
+        # Evita erro na geração da documentação Swagger
+        if getattr(self, 'swagger_fake_view', False):
+            return models.NotaFiscal.objects.none()
+
+        user = self.request.user
+        empresa = self._get_empresa_usuario(user)
+
+        if not empresa:
+            return models.NotaFiscal.objects.none()
+
+        # Verifica restrições da empresa
+        self._verificar_restricoes_empresa(empresa)
+
+        # DECISÃO: Usar banco da empresa ou banco default?
+        if DatabaseManager.empresa_tem_banco_proprio(empresa.id):
+            # Empresa tem banco próprio → usa modelos FLAT
+            print(f"Usando banco próprio da empresa: {empresa.razao_social}")
+            return self._get_queryset_banco_empresa(empresa)
+        else:
+            # Empresa não tem banco próprio → usa modelos NORMAIS
+            print(f"Usando banco DEFAULT para: {empresa.razao_social}")
+            return self._get_queryset_banco_default(empresa)
 
 
 @extend_schema_view(
@@ -534,13 +569,35 @@ class NFeBaseView:
 )
 class NfeListCreateAPIView(NFeBaseView, generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend]
-    filterset_class = NotaFiscalFilter
     pagination_class = utils.CustomPageSizePagination
+    # filterset_class = NotaFiscalFilter
+
+    def _usando_banco_empresa(self):
+        """Verifica se estamos usando banco da empresa"""
+        user = self.request.user
+        empresa = self._get_empresa_usuario(user)
+        return empresa and DatabaseManager.empresa_tem_banco_proprio(empresa.id)
+
+    def get_filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        if self._usando_banco_empresa():
+            # Usando banco da empresa - precisa do filterset para modelos flat
+            return NotaFiscalFilterFlat
+        else:
+            # Usando banco default - filterset normal
+            return NotaFiscalFilter
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
-            return NfeSerializer
-        return NfeModelSerializer
+            if self._usando_banco_empresa():
+                return NfeFlatSerializer
+            else:
+                return NfeSerializer
+        else:
+            if self._usando_banco_empresa():
+                return NfeFlatModelSerializer
+            else:
+                return NfeModelSerializer
 
     def post(self, request, *args, **kwargs):
         try:
@@ -551,6 +608,15 @@ class NfeListCreateAPIView(NFeBaseView, generics.ListCreateAPIView):
 
             if not empresa_id or not nsu or not tipo or not fileXml:
                 return response.Response({'error': 'empresa_id, nsu, tipo e fileXml são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
             empresa = Empresa.objects.filter(pk=empresa_id).first()
             if not empresa:
@@ -1106,10 +1172,32 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
 )
 class NfeListMatrizAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = NfeModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = NotaFiscalFilter
     pagination_class = utils.CustomPageSizePagination
+
+    # filterset_class = NotaFiscalFilter
+    # serializer_class = NfeModelSerializer
+
+    def get_filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        user = self.request.user
+        empresa = utils.obter_matriz_funcionario(user)
+
+        if DatabaseManager.empresa_tem_banco_proprio(empresa):
+            # Usando banco da empresa - precisa do filterset para modelos flat
+            return NotaFiscalFilterFlat
+        else:
+            # Usando banco default - filterset normal
+            return NotaFiscalFilter
+
+    def get_serializer_class(self):
+        user = self.request.user
+        empresa = utils.obter_matriz_funcionario(user)
+
+        if DatabaseManager.empresa_tem_banco_proprio(empresa):
+            return NfeFlatModelSerializer
+        else:
+            return NfeModelSerializer
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
@@ -1125,10 +1213,23 @@ class NfeListMatrizAPIView(generics.ListAPIView):
                 detail="A empresa vinculada à sua conta está desativada, contate um administrador."
             )
 
-        nfe = models.NotaFiscal.objects.filter(
-            empresa=matriz_id,
-            deleted_at__isnull=True,
-        )
+        # DECISÃO: Usar banco da empresa ou banco default?
+        if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+            if DatabaseManager.usar_banco_empresa(matriz_id):
+                # Agora as queries vão para o banco da empresa
+                nfe = NotaFiscalFlat.objects.filter(
+                    empresa_id=matriz_id,
+                    deleted_at__isnull=True
+                )
+            else:
+                # Se não conseguiu conectar no banco da empresa, retorna vazio
+                nfe = NotaFiscalFlat.objects.none()
+        else:
+            # Empresa não tem banco próprio → usa modelos NORMAIS
+            nfe = models.NotaFiscal.objects.filter(
+                empresa=matriz_id,
+                deleted_at__isnull=True,
+            )
 
         if nfe.exists():
             return nfe
@@ -1284,10 +1385,32 @@ class NfeListMatrizAPIView(generics.ListAPIView):
 )
 class NfeListFilialAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = NfeModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = NotaFiscalFilter
     pagination_class = utils.CustomPageSizePagination
+
+    # filterset_class = NotaFiscalFilter
+    # serializer_class = NfeModelSerializer
+
+    def get_filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        user = self.request.user
+        empresa = utils.obter_matriz_funcionario(user)
+
+        if DatabaseManager.empresa_tem_banco_proprio(empresa):
+            # Usando banco da empresa - precisa do filterset para modelos flat
+            return NotaFiscalFilterFlat
+        else:
+            # Usando banco default - filterset normal
+            return NotaFiscalFilter
+
+    def get_serializer_class(self):
+        user = self.request.user
+        empresa = utils.obter_matriz_funcionario(user)
+
+        if DatabaseManager.empresa_tem_banco_proprio(empresa):
+            return NfeFlatModelSerializer
+        else:
+            return NfeModelSerializer
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
@@ -1318,10 +1441,22 @@ class NfeListFilialAPIView(generics.ListAPIView):
                 detail="A filial não foi encontrada."
             )
 
-        nfe = models.NotaFiscal.objects.filter(
-            empresa=getFilial,
-            deleted_at__isnull=True
-        )
+        # DECISÃO: Usar banco da empresa ou banco default?
+        if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+            if DatabaseManager.usar_banco_empresa(matriz_id):
+                # Agora as queries vão para o banco da empresa
+                nfe = NotaFiscalFlat.objects.filter(
+                    empresa_id=getFilial.id,
+                    deleted_at__isnull=True
+                )
+            else:
+                # Se não conseguiu conectar no banco da empresa, retorna vazio
+                nfe = NotaFiscalFlat.objects.none()
+        else:
+            nfe = models.NotaFiscal.objects.filter(
+                empresa=getFilial,
+                deleted_at__isnull=True
+            )
 
         if nfe.exists():
             return nfe

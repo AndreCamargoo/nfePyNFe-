@@ -81,7 +81,7 @@ class Command(BaseCommand):
     # -------------------
     def configurar_banco_empresa(self, empresa_id):
         try:
-            conexao = ConexaoBanco.objects.get(empresa_id=empresa_id)
+            conexao = ConexaoBanco.objects.get(empresa_id=empresa_id, status=True)
             db_alias = f'empresa_{empresa_id}'
 
             db_config = {

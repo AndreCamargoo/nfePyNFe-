@@ -58,6 +58,8 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
     class Meta(EmpresaBaseSerializer.Meta):
         extra_kwargs = {
             'usuario': {'read_only': True},  # evita exigir esse campo no body
+            'senha': {'required': False},  # torna a senha opcional
+            'status': {'read_only': True},  # não permite enviar status via body
         }
 
     def validate(self, attrs):
@@ -199,7 +201,7 @@ class ConexaoBancoModelSerializer(serializers.ModelSerializer):
         empresa = self.context['empresa']
 
         # Sempre sobrescreve a conexão, se já existir
-        conexao_banco = ConexaoBanco.objects.filter(empresa=empresa).first()
+        conexao_banco = ConexaoBanco.objects.filter(empresa=empresa, status=True).first()
 
         if conexao_banco:
             # Se já existir uma conexão, atualiza
