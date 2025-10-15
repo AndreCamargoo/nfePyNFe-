@@ -77,7 +77,7 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
             raise ValidationError({"categoria": "O campo categoria é obrigatório."})
 
         # Validação da categoria
-        if not CategoriaEmpresa.objects.filter(pk=categoria.pk).exists():
+        if not CategoriaEmpresa.objects.filter(pk=categoria).exists():
             raise ValidationError({"categoria": "A categoria indicada não existe."})
 
         # Se for filial
