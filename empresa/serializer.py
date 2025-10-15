@@ -66,7 +66,7 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
         user = self.context['request'].user
         matriz_filial = attrs.get('matriz_filial', None)
         sistema = attrs.get('sistema', None)
-        categoria = attrs.get('categoria', None)
+        categoria = attrs.get('categoria', 1)
 
         # Sistema é obrigatório
         if sistema is None:
