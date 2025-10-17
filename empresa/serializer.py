@@ -140,6 +140,13 @@ class EmpresaListSerializer(EmpresaBaseSerializer):
     pass
 
 
+class EmpresaModelSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Empresa
+        fields = '__all__'
+
+
 class CategoriaEmpresaModelSerializer(serializers.ModelSerializer):
     """Serializer para CategoriaEmpresa"""
     class Meta:

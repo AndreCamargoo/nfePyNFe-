@@ -8,6 +8,7 @@ urlpatterns = [
 
     path('empresas/', views.EmpresaListCreateAPIView.as_view(), name='empresa-create-list'),
     path('empresa/<int:pk>/', views.EmpresaRetrieveUpdateDestroyAPIView.as_view(), name='empresa-detail-view'),
+    path('empresa/minha/', views.EmpresaPorUsuarioAPIView.as_view(), name='empresa-minha'),
 
     path('database/', views.ConexaoBancoListCreateAPIView.as_view(), name='conexaobanco-create-list'),
 

@@ -39,12 +39,16 @@ from app.permissions import PodeAcessarRotasFuncionario
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
-from db_allnube_empresa.models import NotaFiscalFlat
+from db_allnube_empresa.models import (
+    NotaFiscalFlat, ProdutoFlat
+)
 from db_allnube_empresa.utils.database_utils import DatabaseManager
 from db_allnube_empresa.filters import (
-    NotaFiscalFilterFlat
+    NotaFiscalFilterFlat, ProdutoFilterFlat
 )
-from db_allnube_empresa.serializer import NfeFlatSerializer, NfeFlatModelSerializer
+from db_allnube_empresa.serializer import (
+    NfeFlatSerializer, NfeFlatModelSerializer, ProdutoFlatModelSerializer
+)
 
 
 class NFeBaseView:
@@ -97,27 +101,34 @@ class NFeBaseView:
         """
         Retorna o queryset do banco DEFAULT (modelos normais)
         """
-
-        # Funcionário ativo + empresa / filial ativa → retorna notas
-        return models.NotaFiscal.objects.filter(
-            Q(empresa_id=empresa.id) |  # Notas da matriz
-            Q(empresa__matriz_filial_id=empresa.id),  # Notas das filiais
-            deleted_at__isnull=True
-        ).order_by('-dhEmi')
+        try:
+            # Funcionário ativo + empresa / filial ativa → retorna notas
+            return models.NotaFiscal.objects.filter(
+                Q(empresa_id=empresa.id) |  # Notas da matriz
+                Q(empresa__matriz_filial_id=empresa.id),  # Notas das filiais
+                deleted_at__isnull=True
+            ).order_by('-dhEmi')
+        except Exception as e:
+            print(f"Erro ao buscar queryset banco default: {e}")
+            return models.NotaFiscal.objects.none()
 
     def _get_queryset_banco_empresa(self, empresa):
         """
         Retorna o queryset do banco da EMPRESA (modelos flat)
         """
-        # Configura e usa o banco da empresa
-        if DatabaseManager.usar_banco_empresa(empresa.id):
-            # Agora as queries vão para o banco da empresa
-            return NotaFiscalFlat.objects.filter(
-                empresa_id=empresa.id,
-                deleted_at__isnull=True
-            ).order_by('-dhEmi')
-        else:
-            # Se não conseguiu conectar no banco da empresa, retorna vazio
+        try:
+            # Configura e usa o banco da empresa
+            if DatabaseManager.usar_banco_empresa(empresa.id):
+                # Agora as queries vão para o banco da empresa
+                return NotaFiscalFlat.objects.filter(
+                    empresa_id=empresa.id,
+                    deleted_at__isnull=True
+                ).order_by('-dhEmi')
+            else:
+                # Se não conseguiu conectar no banco da empresa, retorna vazio
+                return NotaFiscalFlat.objects.none()
+        except Exception as e:
+            print(f"Erro ao buscar queryset banco empresa: {e}")
             return NotaFiscalFlat.objects.none()
 
     def get_queryset(self):
@@ -132,16 +143,27 @@ class NFeBaseView:
             return models.NotaFiscal.objects.none()
 
         # Verifica restrições da empresa
-        self._verificar_restricoes_empresa(empresa)
+        try:
+            self._verificar_restricoes_empresa(empresa)
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro ao verificar restrições: {e}")
+            return models.NotaFiscal.objects.none()
 
         # DECISÃO: Usar banco da empresa ou banco default?
-        if DatabaseManager.empresa_tem_banco_proprio(empresa.id):
-            # Empresa tem banco próprio → usa modelos FLAT
-            print(f"Usando banco próprio da empresa: {empresa.razao_social}")
-            return self._get_queryset_banco_empresa(empresa)
-        else:
-            # Empresa não tem banco próprio → usa modelos NORMAIS
-            print(f"Usando banco DEFAULT para: {empresa.razao_social}")
+        try:
+            if DatabaseManager.empresa_tem_banco_proprio(empresa.id):
+                # Empresa tem banco próprio → usa modelos FLAT
+                print(f"Usando banco próprio da empresa: {empresa.razao_social}")
+                return self._get_queryset_banco_empresa(empresa)
+            else:
+                # Empresa não tem banco próprio → usa modelos NORMAIS
+                print(f"Usando banco DEFAULT para: {empresa.razao_social}")
+                return self._get_queryset_banco_default(empresa)
+        except Exception as e:
+            print(f"Erro ao determinar banco: {e}")
+            # Fallback para banco default em caso de erro
             return self._get_queryset_banco_default(empresa)
 
 
@@ -574,30 +596,43 @@ class NfeListCreateAPIView(NFeBaseView, generics.ListCreateAPIView):
 
     def _usando_banco_empresa(self):
         """Verifica se estamos usando banco da empresa"""
-        user = self.request.user
-        empresa = self._get_empresa_usuario(user)
-        return empresa and DatabaseManager.empresa_tem_banco_proprio(empresa.id)
+        try:
+            user = self.request.user
+            empresa = self._get_empresa_usuario(user)
+            return empresa and DatabaseManager.empresa_tem_banco_proprio(empresa.id)
+        except Exception as e:
+            print(f"Erro ao verificar banco empresa: {e}")
+            return False
 
     def get_filterset_class(self):
         """Retorna o filterset correto baseado no banco sendo usado"""
-        if self._usando_banco_empresa():
-            # Usando banco da empresa - precisa do filterset para modelos flat
-            return NotaFiscalFilterFlat
-        else:
-            # Usando banco default - filterset normal
-            return NotaFiscalFilter
+        try:
+            if self._usando_banco_empresa():
+                # Usando banco da empresa - precisa do filterset para modelos flat
+                return NotaFiscalFilterFlat
+            else:
+                # Usando banco default - filterset normal
+                return NotaFiscalFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return NotaFiscalFilter  # Fallback para filterset padrão
 
     def get_serializer_class(self):
-        if self.request.method == 'POST':
-            if self._usando_banco_empresa():
-                return NfeFlatSerializer
+        try:
+            if self.request.method == 'POST':
+                if self._usando_banco_empresa():
+                    return NfeFlatSerializer
+                else:
+                    return NfeSerializer
             else:
-                return NfeSerializer
-        else:
-            if self._usando_banco_empresa():
-                return NfeFlatModelSerializer
-            else:
-                return NfeModelSerializer
+                if self._usando_banco_empresa():
+                    return NfeFlatModelSerializer
+                else:
+                    return NfeModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            # Fallback para serializer padrão
+            return NfeModelSerializer if self.request.method == 'GET' else NfeSerializer
 
     def post(self, request, *args, **kwargs):
         try:
@@ -763,7 +798,7 @@ class ProcessarLoteNFeAPIView(APIView):
             # Busca e validação da empresa
             empresa = Empresa.objects.get(pk=empresa_id)
 
-            if empresa.sistema != 3:
+            if empresa.sistema_id not in [3]:
                 return response.Response(
                     {'error': 'Empresa não autorizada para processamento em lote'},
                     status=status.HTTP_403_FORBIDDEN
@@ -1180,61 +1215,77 @@ class NfeListMatrizAPIView(generics.ListAPIView):
 
     def get_filterset_class(self):
         """Retorna o filterset correto baseado no banco sendo usado"""
-        user = self.request.user
-        empresa = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            empresa = utils.obter_matriz_funcionario(user)
 
-        if DatabaseManager.empresa_tem_banco_proprio(empresa):
-            # Usando banco da empresa - precisa do filterset para modelos flat
-            return NotaFiscalFilterFlat
-        else:
-            # Usando banco default - filterset normal
-            return NotaFiscalFilter
+            if DatabaseManager.empresa_tem_banco_proprio(empresa):
+                # Usando banco da empresa - precisa do filterset para modelos flat
+                return NotaFiscalFilterFlat
+            else:
+                # Usando banco default - filterset normal
+                return NotaFiscalFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return NotaFiscalFilter  # Fallback para filterset padrão
 
     def get_serializer_class(self):
-        user = self.request.user
-        empresa = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            empresa = utils.obter_matriz_funcionario(user)
 
-        if DatabaseManager.empresa_tem_banco_proprio(empresa):
-            return NfeFlatModelSerializer
-        else:
-            return NfeModelSerializer
+            if DatabaseManager.empresa_tem_banco_proprio(empresa):
+                return NfeFlatModelSerializer
+            else:
+                return NfeModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return NfeModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.NotaFiscal.objects.none()
 
-        user = self.request.user
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
-
-        # DECISÃO: Usar banco da empresa ou banco default?
-        if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
-            if DatabaseManager.usar_banco_empresa(matriz_id):
-                # Agora as queries vão para o banco da empresa
-                nfe = NotaFiscalFlat.objects.filter(
-                    empresa_id=matriz_id,
-                    deleted_at__isnull=True
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
                 )
-            else:
-                # Se não conseguiu conectar no banco da empresa, retorna vazio
-                nfe = NotaFiscalFlat.objects.none()
-        else:
-            # Empresa não tem banco próprio → usa modelos NORMAIS
-            nfe = models.NotaFiscal.objects.filter(
-                empresa=matriz_id,
-                deleted_at__isnull=True,
-            )
 
-        if nfe.exists():
+            # DECISÃO: Usar banco da empresa ou banco default?
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        # Agora as queries vão para o banco da empresa
+                        nfe = NotaFiscalFlat.objects.filter(
+                            empresa_id=matriz_id,
+                            deleted_at__isnull=True
+                        )
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        nfe = NotaFiscalFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    nfe = NotaFiscalFlat.objects.none()
+            else:
+                # Empresa não tem banco próprio → usa modelos NORMAIS
+                nfe = models.NotaFiscal.objects.filter(
+                    empresa=matriz_id,
+                    deleted_at__isnull=True,
+                )
+
             return nfe
 
-        return models.NotaFiscal.objects.none()
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
+            return models.NotaFiscal.objects.none()
 
 
 @extend_schema_view(
@@ -1393,75 +1444,91 @@ class NfeListFilialAPIView(generics.ListAPIView):
 
     def get_filterset_class(self):
         """Retorna o filterset correto baseado no banco sendo usado"""
-        user = self.request.user
-        empresa = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            empresa = utils.obter_matriz_funcionario(user)
 
-        if DatabaseManager.empresa_tem_banco_proprio(empresa):
-            # Usando banco da empresa - precisa do filterset para modelos flat
-            return NotaFiscalFilterFlat
-        else:
-            # Usando banco default - filterset normal
-            return NotaFiscalFilter
+            if DatabaseManager.empresa_tem_banco_proprio(empresa):
+                # Usando banco da empresa - precisa do filterset para modelos flat
+                return NotaFiscalFilterFlat
+            else:
+                # Usando banco default - filterset normal
+                return NotaFiscalFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return NotaFiscalFilter  # Fallback para filterset padrão
 
     def get_serializer_class(self):
-        user = self.request.user
-        empresa = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            empresa = utils.obter_matriz_funcionario(user)
 
-        if DatabaseManager.empresa_tem_banco_proprio(empresa):
-            return NfeFlatModelSerializer
-        else:
-            return NfeModelSerializer
+            if DatabaseManager.empresa_tem_banco_proprio(empresa):
+                return NfeFlatModelSerializer
+            else:
+                return NfeModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return NfeModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.NotaFiscal.objects.none()
 
-        user = self.request.user
-        documento = self.kwargs.get('documento', None)
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            documento = self.kwargs.get('documento', None)
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
-        if not documento:
-            raise ValidationError({'documento': 'Documento é obrigatório'})
+            if not documento:
+                raise ValidationError({'documento': 'Documento é obrigatório'})
 
-        getFilial = Empresa.objects.filter(
-            documento=documento,
-            matriz_filial=matriz_id,
-            status='1'
-        ).first()
+            getFilial = Empresa.objects.filter(
+                documento=documento,
+                matriz_filial=matriz_id,
+                status='1'
+            ).first()
 
-        if not getFilial:
-            raise NotFound(
-                detail="A filial não foi encontrada."
-            )
+            if not getFilial:
+                raise NotFound(
+                    detail="A filial não foi encontrada."
+                )
 
-        # DECISÃO: Usar banco da empresa ou banco default?
-        if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
-            if DatabaseManager.usar_banco_empresa(matriz_id):
-                # Agora as queries vão para o banco da empresa
-                nfe = NotaFiscalFlat.objects.filter(
-                    empresa_id=getFilial.id,
+            # DECISÃO: Usar banco da empresa ou banco default?
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        # Agora as queries vão para o banco da empresa
+                        nfe = NotaFiscalFlat.objects.filter(
+                            empresa_id=getFilial.id,
+                            deleted_at__isnull=True
+                        )
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        nfe = NotaFiscalFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    nfe = NotaFiscalFlat.objects.none()
+            else:
+                nfe = models.NotaFiscal.objects.filter(
+                    empresa=getFilial,
                     deleted_at__isnull=True
                 )
-            else:
-                # Se não conseguiu conectar no banco da empresa, retorna vazio
-                nfe = NotaFiscalFlat.objects.none()
-        else:
-            nfe = models.NotaFiscal.objects.filter(
-                empresa=getFilial,
-                deleted_at__isnull=True
-            )
 
-        if nfe.exists():
             return nfe
 
-        return models.NotaFiscal.objects.none()
+        except (PermissionDenied, ValidationError, NotFound):
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
+            return models.NotaFiscal.objects.none()
 
 
 @extend_schema_view(
@@ -1600,7 +1667,20 @@ class NfeListFilialAPIView(generics.ListAPIView):
     )
 )
 class NfeRetrieveUpdateDestroyAPIView(NFeBaseView, generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = NfeModelSerializer
+    # serializer_class = NfeModelSerializer
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            empresa = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(empresa):
+                return NfeFlatModelSerializer
+            else:
+                return NfeModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return NfeModelSerializer  # Fallback para serializer padrão
 
     def delete(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -1772,42 +1852,110 @@ class NfeRetrieveUpdateDestroyAPIView(NFeBaseView, generics.RetrieveUpdateDestro
 )
 class NfeTodosProdutosListAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = ProdutoModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = ProdutoFilter
     pagination_class = utils.CustomPageSizePagination
+
+    # filterset_class = ProdutoFilter
+    # serializer_class = ProdutoModelSerializer
+
+    def get_filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        try:
+            user = self.request.user
+            empresa = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(empresa):
+                # Usando banco da empresa - precisa do filterset para modelos flat
+                return ProdutoFilterFlat
+            else:
+                # Usando banco default - filterset normal
+                return ProdutoFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return ProdutoFilter  # Fallback para filterset padrão
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            empresa = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(empresa):
+                return ProdutoFlatModelSerializer
+            else:
+                return ProdutoModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return ProdutoModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Produto.objects.none()
 
-        user = self.request.user
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            if not matriz_id:
+                return models.Produto.objects.none()
 
-        if not matriz_id:
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                # Busca todas as filiais ativas da matriz
+                filiais_ids = list(Empresa.objects.filter(
+                    matriz_filial_id=matriz_id,
+                    status='1'
+                ).values_list('id', flat=True))  # CONVERTE para lista
+
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        # Busca notas da matriz e de todas as filiais
+                        notas_fiscais = NotaFiscalFlat.objects.filter(
+                            Q(empresa_id=matriz_id) |  # Notas da matriz
+                            Q(empresa_id__in=filiais_ids),  # Notas das filiais
+                            deleted_at__isnull=True
+                        )
+
+                        print(f'notas fiscais: {notas_fiscais}')
+
+                        # Pega apenas os IDs das notas fiscais
+                        nota_fiscal_ids = notas_fiscais.values_list('id', flat=True)
+
+                        # Retorna produtos dessas notas fiscais
+                        return ProdutoFlat.objects.filter(
+                            nota_fiscal_id__in=nota_fiscal_ids
+                        )
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return ProdutoFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return ProdutoFlat.objects.none()
+            else:
+                # Empresa não tem banco próprio → usa modelos NORMAIS
+                notas_fiscais = models.NotaFiscal.objects.filter(
+                    Q(empresa=matriz_id) |
+                    Q(empresa__matriz_filial=matriz_id),
+                    deleted_at__isnull=True  # Garante que só pega notas não deletadas
+                )
+
+                # Pega apenas os IDs das notas fiscais
+                nota_fiscal_ids = notas_fiscais.values_list('id', flat=True)
+
+                # Retorna produtos dessas notas fiscais
+                return models.Produto.objects.filter(
+                    nota_fiscal_id__in=nota_fiscal_ids
+                )
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Produto.objects.none()
-
-        # Primeiro filtra as notas fiscais permitidas
-        notas_fiscais = models.NotaFiscal.objects.filter(
-            Q(empresa=matriz_id) |
-            Q(empresa__matriz_filial=matriz_id),
-            deleted_at__isnull=True  # Garante que só pega notas não deletadas
-        )
-
-        # Pega apenas os IDs das notas fiscais
-        nota_fiscal_ids = notas_fiscais.values_list('id', flat=True)
-
-        # Retorna produtos dessas notas fiscais
-        return models.Produto.objects.filter(
-            nota_fiscal_id__in=nota_fiscal_ids
-        )
 
 
 @extend_schema_view(
@@ -1921,41 +2069,99 @@ class NfeTodosProdutosListAPIView(generics.ListAPIView):
 )
 class NfeProdutosMatrizListAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = ProdutoModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = ProdutoFilter
     pagination_class = utils.CustomPageSizePagination
+
+    def get_filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                # Usando banco da empresa - precisa do filterset para modelos flat
+                return ProdutoFilterFlat
+            else:
+                # Usando banco default - filterset normal
+                return ProdutoFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return ProdutoFilter  # Fallback para filterset padrão
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                return ProdutoFlatModelSerializer
+            else:
+                return ProdutoModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return ProdutoModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Produto.objects.none()
 
-        user = self.request.user
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            if not matriz_id:
+                return models.Produto.objects.none()
 
-        if not matriz_id:
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        # Para tabelas flat, não podemos usar select_related nem relações __
+                        # Primeiro buscamos as notas fiscais da matriz
+                        notas_fiscais_ids = NotaFiscalFlat.objects.filter(
+                            empresa_id=matriz_id,
+                            deleted_at__isnull=True
+                        ).values_list('id', flat=True)
+
+                        # Depois buscamos os produtos dessas notas
+                        produtos = ProdutoFlat.objects.filter(
+                            nota_fiscal_id__in=notas_fiscais_ids
+                        )
+
+                        return produtos.order_by('-nItem')
+
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return ProdutoFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return ProdutoFlat.objects.none()
+            else:
+                # Código para banco default (com relações normais)
+                produtos = models.Produto.objects.filter(
+                    nota_fiscal__empresa=matriz_id,
+                    nota_fiscal__deleted_at__isnull=True
+                ).select_related(
+                    'nota_fiscal',
+                    'imposto',
+                    'nota_fiscal__ide',
+                    'nota_fiscal__emitente',
+                    'nota_fiscal__destinatario'
+                )
+
+                return produtos.order_by('-nota_fiscal__dhEmi', 'nItem')
+
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Produto.objects.none()
-
-        # Cria o queryset base de Produtos
-        produtos = models.Produto.objects.filter(
-            nota_fiscal__empresa=matriz_id,
-            nota_fiscal__deleted_at__isnull=True
-        ).select_related(
-            'nota_fiscal',
-            'imposto',
-            'nota_fiscal__ide',
-            'nota_fiscal__emitente',
-            'nota_fiscal__destinatario'
-        )
-
-        return produtos.order_by('-nota_fiscal__dhEmi', 'nItem')
 
 
 @extend_schema_view(

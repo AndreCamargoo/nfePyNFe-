@@ -19,7 +19,7 @@ class NFeLoteProcessor:
         self.nsu = nsu
         self.arquivo_zip = arquivo_zip
 
-    def sanitizar_erro_banco(error_message):
+    def sanitizar_erro_banco(self, error_message):
         """
         Remove informações sensíveis do banco de dados das mensagens de erro
         """

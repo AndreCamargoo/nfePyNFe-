@@ -2,7 +2,7 @@ from django.db.models import Q
 
 from rest_framework import generics
 
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,7 +12,7 @@ from empresa.models import (
     Funcionario, RotasPermitidas
 )
 from empresa.serializer import (
-    EmpresaCreateSerializer, EmpresaUpdateSerializer, EmpresaListSerializer,
+    EmpresaModelSerializer, EmpresaCreateSerializer, EmpresaUpdateSerializer, EmpresaListSerializer,
     CategoriaEmpresaModelSerializer, ConexaoBancoModelSerializer,
     FuncionarioListSerializer, FuncionarioSerializer,
     FuncionarioRotaModelSerializer
@@ -185,6 +185,20 @@ class EmpresaRetrieveUpdateDestroyAPIView(EmpresaBaseView, generics.RetrieveUpda
 
     def patch(self, request, *args, **kwargs):
         return self.partial_update(request, *args, **kwargs)
+
+
+class EmpresaPorUsuarioAPIView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, UsuarioIndependenteOuAdmin]
+    serializer_class = EmpresaModelSerializer
+
+    def get_object(self):
+        user = self.request.user  # Usuário autenticado
+
+        try:
+            # Retorna apenas a empresa matriz do usuário logado
+            return Empresa.objects.get(usuario=user, matriz_filial__isnull=True)
+        except Empresa.DoesNotExist:
+            raise NotFound("Empresa matriz não encontrada para este usuário.")
 
 
 @extend_schema_view(

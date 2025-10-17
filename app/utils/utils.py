@@ -72,8 +72,18 @@ def obter_matriz_funcionario(user):
                 print(f"Matriz encontrada - Empresa ID: {matriz.id}")
                 return matriz.id
             else:
-                print("Nenhuma matriz encontrada")
-                return None
+                filial = Empresa.objects.filter(
+                    usuario=user,
+                    status='1',
+                    sistema_id=3
+                ).first()
+
+                if filial:
+                    print(f"Matriz encontrada - Empresa ID: {filial.id}")
+                    return filial.id
+
+            print("Nenhuma matriz encontrada")
+            return None
 
     except Exception as e:
         print(f"Erro ao obter matriz: {e}")

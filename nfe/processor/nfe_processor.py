@@ -26,7 +26,7 @@ class NFeProcessor:
         self.xml = self._abrir_arquivo(fileXml)
         self.root = self._parse_xml()
         self.infNFe = None
-        self.bancoProprio = DatabaseManager.empresa_tem_banco_proprio(self.empresa.id)
+        # self.bancoProprio = DatabaseManager.empresa_tem_banco_proprio(self.empresa.id)
         self.nota_existia_default = False
         self.nota_existia_empresa = False
 
@@ -56,14 +56,10 @@ class NFeProcessor:
             print(self.xml)
             return None
 
-        # Configura banco da empresa se necessário
-        if self.bancoProprio:
-            DatabaseManager.usar_banco_empresa(self.empresa.id)
-
         with transaction.atomic():
             self._criar_historico_nsu()
 
-            # Processa no banco DEFAULT
+            # Processa no banco DEFAULT (SEMPRE)
             nota_default = self._criar_nota_fiscal_default()
 
             # Só cria os relacionados se a nota NÃO existia anteriormente
@@ -77,21 +73,29 @@ class NFeProcessor:
                 cobranca_default = self._criar_cobranca_default(nota_default)
                 self._criar_pagamento_default(cobranca_default)
 
-            # Processa no banco da EMPRESA se tiver banco próprio
+            # Processa no banco da EMPRESA APENAS SE tiver banco próprio
             nota_empresa = None
-            if self.bancoProprio:
-                nota_empresa = self._criar_nota_fiscal_empresa()
+            try:
+                # Configura banco da empresa se necessário
+                success = DatabaseManager.usar_banco_empresa(self.empresa.id)
+                if success:
+                    nota_empresa = self._criar_nota_fiscal_empresa()
 
-                # Só cria os relacionados se a nota NÃO existia anteriormente
-                if nota_empresa and not self.nota_existia_empresa:
-                    self._criar_ide_empresa(nota_empresa)
-                    self._criar_emitente_empresa(nota_empresa)
-                    self._criar_destinatario_empresa(nota_empresa)
-                    self._criar_produto_impostos_empresa(nota_empresa)
-                    self._criar_total_empresa(nota_empresa)
-                    self._criar_transporte_empresa(nota_empresa)
-                    cobranca_empresa = self._criar_cobranca_empresa(nota_empresa)
-                    self._criar_pagamento_empresa(cobranca_empresa)
+                    # Só cria os relacionados se a nota NÃO existia anteriormente
+                    if nota_empresa and not self.nota_existia_empresa:
+                        self._criar_ide_empresa(nota_empresa)
+                        self._criar_emitente_empresa(nota_empresa)
+                        self._criar_destinatario_empresa(nota_empresa)
+                        self._criar_produto_impostos_empresa(nota_empresa)
+                        self._criar_total_empresa(nota_empresa)
+                        self._criar_transporte_empresa(nota_empresa)
+                        cobranca_empresa = self._criar_cobranca_empresa(nota_empresa)
+                        self._criar_pagamento_empresa(cobranca_empresa)
+                else:
+                    print(f"AVISO: Não foi possível configurar banco para empresa {self.empresa.id}")
+            except Exception as e:
+                print(f"ERRO ao processar no banco da empresa {self.empresa.id}: {e}")
+                # Continua o processamento mesmo com erro no banco da empresa
 
             return nota_default if nota_default else nota_empresa
 

@@ -79,7 +79,7 @@ class NotaFiscalFilterFlat(django_filters.FilterSet):
         return queryset.filter(filters)
 
 
-class ProdutoFilter(django_filters.FilterSet):
+class ProdutoFilterFlat(django_filters.FilterSet):
     q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
     xProd = django_filters.CharFilter(field_name='xProd', lookup_expr='icontains')
     cProd = django_filters.CharFilter(field_name='cProd', lookup_expr='icontains')

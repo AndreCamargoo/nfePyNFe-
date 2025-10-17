@@ -8,7 +8,20 @@ class FlatBaseManager(models.Manager):
         return super().get_queryset().using(db_alias)
 
 
-class NotaFiscalFlat(models.Model):
+class FlatBaseModel(models.Model):
+    objects = FlatBaseManager()
+
+    class Meta:
+        abstract = True
+        managed = True
+
+    def save(self, *args, **kwargs):
+        db_alias = getattr(settings, 'EMPRESA_DATABASE_ALIAS', 'default')
+        kwargs['using'] = db_alias
+        super().save(*args, **kwargs)
+
+
+class NotaFiscalFlat(FlatBaseModel):
     empresa_id = models.IntegerField()
     chave = models.CharField(max_length=44, unique=True)
     versao = models.CharField(max_length=10)
@@ -38,7 +51,7 @@ class NotaFiscalFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class IdeFlat(models.Model):
+class IdeFlat(FlatBaseModel):
     nota_fiscal_id = models.IntegerField()
     cUF = models.CharField(max_length=2, null=True, blank=True)
     natOp = models.CharField(max_length=60, null=True, blank=True)
@@ -75,7 +88,7 @@ class IdeFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class EmitenteFlat(models.Model):
+class EmitenteFlat(FlatBaseModel):
     nota_fiscal_id = models.IntegerField()
     CNPJ = models.CharField(max_length=14, null=True, blank=True)
     xNome = models.CharField(max_length=100, null=True, blank=True)
@@ -110,7 +123,7 @@ class EmitenteFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class DestinatarioFlat(models.Model):
+class DestinatarioFlat(FlatBaseModel):
     nota_fiscal_id = models.IntegerField()
     CNPJ = models.CharField(max_length=14, null=True, blank=True)
     xNome = models.CharField(max_length=100, null=True, blank=True)
@@ -144,7 +157,7 @@ class DestinatarioFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class ProdutoFlat(models.Model):
+class ProdutoFlat(FlatBaseModel):
     nota_fiscal_id = models.IntegerField()
     nItem = models.IntegerField()
     cProd = models.CharField(max_length=20, null=True, blank=True)
@@ -178,7 +191,7 @@ class ProdutoFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class ImpostoFlat(models.Model):
+class ImpostoFlat(FlatBaseModel):
     produto_id = models.IntegerField()
     vTotTrib = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     orig = models.CharField(max_length=1, null=True, blank=True)
@@ -204,7 +217,7 @@ class ImpostoFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class TotalFlat(models.Model):
+class TotalFlat(FlatBaseModel):
     nota_fiscal_id = models.IntegerField()
     vBC = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     vICMS = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -244,7 +257,7 @@ class TotalFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class TransporteFlat(models.Model):
+class TransporteFlat(FlatBaseModel):
     nota_fiscal_id = models.IntegerField()
     modFrete = models.IntegerField(null=True, blank=True)
     qVol = models.IntegerField(blank=True, null=True)
@@ -266,7 +279,7 @@ class TransporteFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class CobrancaFlat(models.Model):
+class CobrancaFlat(FlatBaseModel):
     nota_fiscal_id = models.IntegerField()
     nFat = models.CharField(max_length=20, null=True, blank=True)
     vOrig = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -290,7 +303,7 @@ class CobrancaFlat(models.Model):
         super().save(*args, **kwargs)
 
 
-class PagamentoFlat(models.Model):
+class PagamentoFlat(FlatBaseModel):
     cobranca_id = models.IntegerField()
     indPag = models.IntegerField(null=True, blank=True)
     tPag = models.IntegerField(null=True, blank=True)
