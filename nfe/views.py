@@ -31,6 +31,7 @@ from nfe.serializer import (
     EmitenteModelSerializer, NfeFaturamentoOutputSerializer,
     NfeFaturamentoMesOutputSerializer, NfeProdutosOutputSerializer
 )
+
 from nfe.processor.nfe_processor import NFeProcessor
 from nfe.processor.nfe_lote_zip import NFeLoteProcessor
 
@@ -40,14 +41,15 @@ from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiPara
 from drf_spectacular.types import OpenApiTypes
 
 from db_allnube_empresa.models import (
-    NotaFiscalFlat, ProdutoFlat
+    NotaFiscalFlat, ProdutoFlat, EmitenteFlat
 )
 from db_allnube_empresa.utils.database_utils import DatabaseManager
 from db_allnube_empresa.filters import (
-    NotaFiscalFilterFlat, ProdutoFilterFlat
+    NotaFiscalFilterFlat, ProdutoFilterFlat, FornecedorFilterFlat
 )
 from db_allnube_empresa.serializer import (
-    NfeFlatSerializer, NfeFlatModelSerializer, ProdutoFlatModelSerializer
+    NfeFlatSerializer, NfeFlatModelSerializer,
+    ProdutoFlatModelSerializer, EmitenteFlatModelSerializer
 )
 
 
@@ -119,9 +121,14 @@ class NFeBaseView:
         try:
             # Configura e usa o banco da empresa
             if DatabaseManager.usar_banco_empresa(empresa.id):
+                matriz_filiais_ids = list(Empresa.objects.filter(
+                    Q(id=empresa.id) | Q(matriz_filial_id=empresa.id),
+                    status='1'
+                ).values_list('id', flat=True))
+
                 # Agora as queries vão para o banco da empresa
                 return NotaFiscalFlat.objects.filter(
-                    empresa_id=empresa.id,
+                    empresa_id__in=matriz_filiais_ids,
                     deleted_at__isnull=True
                 ).order_by('-dhEmi')
             else:
@@ -174,11 +181,11 @@ class NFeBaseView:
         summary="01 Listar notas fiscais",
         description="""
         Retorna uma lista paginada de notas fiscais da matriz e todas filiais com filtros avançados.
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
-        
+
         **Filtros disponíveis:**
         - `ide_cUF`: Código da UF do emitente
         - `emitente_nome`: Nome do emitente
@@ -1091,20 +1098,20 @@ class GerarDanfeAPIView(generics.RetrieveAPIView):
         summary="04 Listar notas fiscais da matriz",
         description="""
         Retorna todas as notas fiscais da matriz do usuário autenticado.
-        
+
         **Características:**
         - Lista apenas notas da matriz (empresa principal)
         - Não requer parâmetros na URL
         - Aplica filtros e paginação
         - Retorna apenas notas não deletadas
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
-        
+
         **Filtros disponíveis:**
         - `ide_cUF`: Código da UF do emitente
-        - `emitente_nome`: Nome do emitente  
+        - `emitente_nome`: Nome do emitente
         - `chave`: Chave da nota fiscal
         - `dhEmi`: Data de emissão (range: dhEmi_after & dhEmi_before)
         - `emitente_CNPJ`: CNPJ do emitente
@@ -1295,21 +1302,21 @@ class NfeListMatrizAPIView(generics.ListAPIView):
         summary="05 Listar notas fiscais por filial",
         description="""
         Retorna notas fiscais de uma filial específica através do documento (CNPJ).
-        
+
         **Características:**
         - Lista notas de uma filial específica
         - Requer o documento (CNPJ) da filial como parâmetro na URL
         - Valida se a filial pertence à matriz do usuário
         - Valida se a filial está ativa
         - Retorna apenas notas não deletadas
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
-        
+
         **Filtros disponíveis:**
         - `ide_cUF`: Código da UF do emitente
-        - `emitente_nome`: Nome do emitente  
+        - `emitente_nome`: Nome do emitente
         - `chave`: Chave da nota fiscal
         - `dhEmi`: Data de emissão (range: dhEmi_after & dhEmi_before)
         - `emitente_CNPJ`: CNPJ do emitente
@@ -1538,16 +1545,16 @@ class NfeListFilialAPIView(generics.ListAPIView):
         summary="06 Obter detalhes de uma nota fiscal",
         description="""
         Retorna os detalhes completos de uma nota fiscal específica.
-        
+
         **Informações incluídas:**
         - Dados básicos da nota (chave, versão, datas)
         - Informações do emitente
-        - Informações do destinatário  
+        - Informações do destinatário
         - Produtos e impostos
         - Totais e valores
         - Informações de transporte
         - Cobrança e pagamentos
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -1696,23 +1703,23 @@ class NfeRetrieveUpdateDestroyAPIView(NFeBaseView, generics.RetrieveUpdateDestro
         summary="01 Listar todos os produtos das notas fiscais",
         description="""
         Retorna todos os produtos de todas as notas fiscais da matriz e suas filiais.
-        
+
         **Características:**
         - Lista produtos de todas as notas fiscais (matriz + filiais)
         - Inclui informações de impostos de cada produto
         - Aplica filtros específicos para produtos
         - Retorna dados paginados
-        
+
         **Escopo dos dados:**
         - Produtos da matriz do usuário
         - Produtos de todas as filiais da matriz
         - Apenas produtos de notas fiscais não deletadas
-        
+
         **Estrutura do produto:**
         - Dados básicos do produto (código, descrição, NCM, etc.)
         - Quantidades e valores (comercial e tributário)
         - Informações de impostos (ICMS, IPI, PIS, COFINS)
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -1858,21 +1865,17 @@ class NfeTodosProdutosListAPIView(generics.ListAPIView):
     # filterset_class = ProdutoFilter
     # serializer_class = ProdutoModelSerializer
 
-    def get_filterset_class(self):
+    @property
+    def filterset_class(self):
         """Retorna o filterset correto baseado no banco sendo usado"""
         try:
             user = self.request.user
-            empresa = utils.obter_matriz_funcionario(user)
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-            if DatabaseManager.empresa_tem_banco_proprio(empresa):
-                # Usando banco da empresa - precisa do filterset para modelos flat
-                return ProdutoFilterFlat
-            else:
-                # Usando banco default - filterset normal
-                return ProdutoFilter
+            return ProdutoFilterFlat if DatabaseManager.empresa_tem_banco_proprio(matriz_id) else ProdutoFilter
         except Exception as e:
             print(f"Erro ao determinar filterset: {e}")
-            return ProdutoFilter  # Fallback para filterset padrão
+            return ProdutoFilter
 
     def get_serializer_class(self):
         try:
@@ -1965,20 +1968,20 @@ class NfeTodosProdutosListAPIView(generics.ListAPIView):
         summary="02 Listar produtos das notas fiscais da matriz",
         description="""
         Retorna todos os produtos das notas fiscais da matriz do usuário.
-        
+
         **Características:**
         - Lista produtos apenas das notas fiscais da matriz
         - Inclui informações de impostos de cada produto
         - Aplica filtros específicos para produtos
         - Retorna dados paginados
         - Ordenado por data de emissão (mais recente primeiro) e número do item
-        
+
         **Estrutura do produto:**
         - Dados básicos do produto (código, descrição, NCM, etc.)
         - Quantidades e valores (comercial e tributário)
         - Informações de impostos (ICMS, IPI, PIS, COFINS)
         - Dados relacionados da nota fiscal
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -2072,21 +2075,20 @@ class NfeProdutosMatrizListAPIView(generics.ListAPIView):
     filter_backends = [DjangoFilterBackend]
     pagination_class = utils.CustomPageSizePagination
 
-    def get_filterset_class(self):
+    # filterset_class = ProdutoFilter
+    # serializer_class = ProdutoModelSerializer
+
+    @property
+    def filterset_class(self):
         """Retorna o filterset correto baseado no banco sendo usado"""
         try:
             user = self.request.user
             matriz_id = utils.obter_matriz_funcionario(user)
 
-            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
-                # Usando banco da empresa - precisa do filterset para modelos flat
-                return ProdutoFilterFlat
-            else:
-                # Usando banco default - filterset normal
-                return ProdutoFilter
+            return ProdutoFilterFlat if DatabaseManager.empresa_tem_banco_proprio(matriz_id) else ProdutoFilter
         except Exception as e:
             print(f"Erro ao determinar filterset: {e}")
-            return ProdutoFilter  # Fallback para filterset padrão
+            return ProdutoFilter
 
     def get_serializer_class(self):
         try:
@@ -2122,7 +2124,6 @@ class NfeProdutosMatrizListAPIView(generics.ListAPIView):
             if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
                 try:
                     if DatabaseManager.usar_banco_empresa(matriz_id):
-                        # Para tabelas flat, não podemos usar select_related nem relações __
                         # Primeiro buscamos as notas fiscais da matriz
                         notas_fiscais_ids = NotaFiscalFlat.objects.filter(
                             empresa_id=matriz_id,
@@ -2171,7 +2172,7 @@ class NfeProdutosMatrizListAPIView(generics.ListAPIView):
         summary="03 Listar produtos das notas fiscais de uma filial",
         description="""
         Retorna todos os produtos das notas fiscais de uma filial específica.
-        
+
         **Características:**
         - Lista produtos apenas das notas fiscais da filial especificada
         - Valida se a filial pertence à matriz do usuário
@@ -2180,7 +2181,7 @@ class NfeProdutosMatrizListAPIView(generics.ListAPIView):
         - Aplica filtros específicos para produtos
         - Retorna dados paginados
         - Ordenado por data de emissão (mais recente primeiro) e número do item
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -2296,55 +2297,115 @@ class NfeProdutosMatrizListAPIView(generics.ListAPIView):
 )
 class NfeProdutosFilialListAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = ProdutoModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = ProdutoFilter
     pagination_class = utils.CustomPageSizePagination
+
+    # filterset_class = ProdutoFilter
+    # serializer_class = ProdutoModelSerializer
+
+    @property
+    def filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            return ProdutoFilterFlat if DatabaseManager.empresa_tem_banco_proprio(matriz_id) else ProdutoFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return ProdutoFilter
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                return ProdutoFlatModelSerializer
+            else:
+                return ProdutoModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return ProdutoModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Produto.objects.none()
 
-        user = self.request.user
-        documento = self.kwargs.get('documento', None)
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            documento = self.kwargs.get('documento', None)
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
-        if not documento:
-            raise ValidationError({'documento': 'Documento é obrigatório'})
+            if not documento:
+                raise ValidationError({'documento': 'Documento é obrigatório'})
 
-        if not matriz_id:
+            if not matriz_id:
+                return models.Produto.objects.none()
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                # Busca todas as filiais ativas da matriz
+                filial = Empresa.objects.filter(
+                    matriz_filial_id=matriz_id,
+                    documento=documento,
+                    status='1'
+                ).first()
+
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        notas_fiscais_ids = NotaFiscalFlat.objects.filter(
+                            empresa_id=filial.id,
+                            deleted_at__isnull=True
+                        ).values_list('id', flat=True)
+
+                        # Depois buscamos os produtos dessas notas
+                        produtos = ProdutoFlat.objects.filter(
+                            nota_fiscal_id__in=notas_fiscais_ids
+                        )
+
+                        return produtos.order_by('-nItem')
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return ProdutoFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return ProdutoFlat.objects.none()
+            else:
+                # Verifica se a filial existe e pertence à matriz
+                filial = Empresa.objects.filter(
+                    documento=documento,
+                    matriz_filial_id=matriz_id,
+                    status='1'
+                ).first()
+
+                if not filial:
+                    raise NotFound(detail="A filial não foi encontrada.")
+
+                # Cria o queryset base de Produtos
+                produtos = models.Produto.objects.filter(
+                    nota_fiscal__empresa=filial,  # Usa o ID da filial encontrada
+                    nota_fiscal__deleted_at__isnull=True
+                ).select_related(
+                    'nota_fiscal',
+                    'imposto',
+                    'nota_fiscal__ide',
+                    'nota_fiscal__emitente',
+                    'nota_fiscal__destinatario'
+                )
+
+                return produtos.order_by('-nota_fiscal__dhEmi', 'nItem')
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Produto.objects.none()
-
-        # Verifica se a filial existe e pertence à matriz
-        filial = Empresa.objects.filter(
-            documento=documento,
-            matriz_filial=matriz_id,
-            status='1'
-        ).first()
-
-        if not filial:
-            raise NotFound(detail="A filial não foi encontrada.")
-
-        # Cria o queryset base de Produtos
-        produtos = models.Produto.objects.filter(
-            nota_fiscal__empresa=filial,  # Usa o ID da filial encontrada
-            nota_fiscal__deleted_at__isnull=True
-        ).select_related(
-            'nota_fiscal',
-            'imposto',
-            'nota_fiscal__ide',
-            'nota_fiscal__emitente',
-            'nota_fiscal__destinatario'
-        )
-
-        return produtos.order_by('-nota_fiscal__dhEmi', 'nItem')
 
 
 @extend_schema_view(
@@ -2354,7 +2415,7 @@ class NfeProdutosFilialListAPIView(generics.ListAPIView):
         summary="04 Obter detalhes completos de um produto",
         description="""
         Retorna os detalhes completos de um produto específico incluindo todas as informações relacionadas.
-        
+
         **Informações incluídas:**
         - **Dados do produto**: código, descrição, NCM, CFOP, quantidades, valores
         - **Impostos do produto**: ICMS, IPI, PIS, COFINS, totais tributários
@@ -2362,11 +2423,11 @@ class NfeProdutosFilialListAPIView(generics.ListAPIView):
         - **Totais da nota**: valores de ICMS, PIS, COFINS, frete, seguros, etc.
         - **Transporte**: modalidade de frete, quantidades de volumes
         - **Cobrança e pagamentos**: informações financeiras da nota
-        
+
         **Escopo de acesso:**
         - Produto deve pertencer à matriz do usuário OU a uma de suas filiais
         - Apenas produtos de notas fiscais não deletadas
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -2499,44 +2560,81 @@ class NfeProdutosFilialListAPIView(generics.ListAPIView):
 )
 class NfeProdutoRetrieveAPIView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = ProdutoModelSerializer
     lookup_field = 'pk'  # Já é o padrão, mas explícito é melhor
+
+    # serializer_class = ProdutoModelSerializer
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                return ProdutoFlatModelSerializer
+            else:
+                return ProdutoModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return ProdutoModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Produto.objects.none()
 
-        user = self.request.user
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
-        if not matriz_id:
-            # Retorna queryset vazio se não encontrar empresa
+            if not matriz_id:
+                # Retorna queryset vazio se não encontrar empresa
+                return models.Produto.objects.none()
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        produto = ProdutoFlat.objects.filter(
+                            id=self.kwargs.get('pk'),
+                            nota_fiscal_id__in=NotaFiscalFlat.objects.filter(
+                                empresa_id=matriz_id
+                            ).values('id')
+                        )
+                        return produto
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return ProdutoFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return ProdutoFlat.objects.none()
+            else:
+                # Filtra produtos pela empresa da matriz ou suas filiais
+                return models.Produto.objects.filter(
+                    Q(nota_fiscal__empresa=matriz_id) |
+                    Q(nota_fiscal__empresa__matriz_filial=matriz_id),
+                    nota_fiscal__deleted_at__isnull=True  # Garante apenas notas não deletadas
+                ).select_related(
+                    'nota_fiscal',
+                    'imposto',
+                    'nota_fiscal__ide',
+                    'nota_fiscal__emitente',
+                    'nota_fiscal__destinatario',
+                    'nota_fiscal__total',
+                    'nota_fiscal__transporte',
+                    'nota_fiscal__cobranca'
+                ).prefetch_related(
+                    'nota_fiscal__cobranca__pagamentos'
+                )
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Produto.objects.none()
-
-        # Filtra produtos pela empresa da matriz ou suas filiais
-        return models.Produto.objects.filter(
-            Q(nota_fiscal__empresa=matriz_id) |
-            Q(nota_fiscal__empresa__matriz_filial=matriz_id),
-            nota_fiscal__deleted_at__isnull=True  # Garante apenas notas não deletadas
-        ).select_related(
-            'nota_fiscal',
-            'imposto',
-            'nota_fiscal__ide',
-            'nota_fiscal__emitente',
-            'nota_fiscal__destinatario',
-            'nota_fiscal__total',
-            'nota_fiscal__transporte',
-            'nota_fiscal__cobranca'
-        ).prefetch_related(
-            'nota_fiscal__cobranca__pagamentos'
-        )
 
 
 @extend_schema_view(
@@ -2546,24 +2644,24 @@ class NfeProdutoRetrieveAPIView(generics.RetrieveAPIView):
         summary="01 Listar todos os fornecedores",
         description="""
         Retorna todos os fornecedores (emitentes) das notas fiscais da matriz e suas filiais.
-        
+
         **Características:**
         - Lista todos os emitentes das notas fiscais da matriz e filiais
         - Fornecedores únicos baseados nas notas fiscais
         - Aplica filtros específicos para fornecedores
         - Retorna dados paginados
-        
+
         **Escopo dos dados:**
         - Emitentes das notas fiscais da matriz do usuário
         - Emitentes das notas fiscais de todas as filiais da matriz
         - Apenas emitentes de notas fiscais não deletadas
-        
+
         **Informações do emitente:**
         - Dados cadastrais (CNPJ, razão social, nome fantasia)
         - Inscrição estadual (IE) e regime tributário (CRT)
         - Endereço completo (logradouro, número, bairro, cidade, UF, CEP)
         - Contato (telefone)
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -2689,42 +2787,107 @@ class NfeProdutoRetrieveAPIView(generics.RetrieveAPIView):
 )
 class NfeTodosFornecedorListAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = EmitenteModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = FornecedorFilter
     pagination_class = utils.CustomPageSizePagination
+
+    # filterset_class = FornecedorFilter
+    # serializer_class = EmitenteModelSerializer
+
+    @property
+    def filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            return FornecedorFilterFlat if DatabaseManager.empresa_tem_banco_proprio(matriz_id) else FornecedorFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return FornecedorFilter
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                return EmitenteFlatModelSerializer
+            else:
+                return EmitenteModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return EmitenteModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Emitente.objects.none()
 
-        user = self.request.user
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
-        if not matriz_id:
+            if not matriz_id:
+                return models.Emitente.objects.none()
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                # Busca todas as filiais ativas da matriz
+                filiais_ids = list(Empresa.objects.filter(
+                    matriz_filial_id=matriz_id,
+                    status='1'
+                ).values_list('id', flat=True))  # CONVERTE para lista
+
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+
+                        # Busca notas da matriz e de todas as filiais
+                        notas_fiscais = NotaFiscalFlat.objects.filter(
+                            Q(empresa_id=matriz_id) |  # Notas da matriz
+                            Q(empresa_id__in=filiais_ids),  # Notas das filiais
+                            deleted_at__isnull=True
+                        )
+
+                        print(f'notas fiscais: {notas_fiscais}')
+
+                        # Pega apenas os IDs das notas fiscais
+                        nota_fiscal_ids = notas_fiscais.values_list('id', flat=True)
+
+                        # Depois buscamos os produtos dessas notas
+                        return EmitenteFlat.objects.filter(
+                            nota_fiscal_id__in=nota_fiscal_ids
+                        ).distinct()
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return EmitenteFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return ProdutoFlat.objects.none()
+            else:
+                # Primeiro filtra as notas fiscais permitidas
+                notas_fiscais = models.NotaFiscal.objects.filter(
+                    Q(empresa=matriz_id) |
+                    Q(empresa__matriz_filial=matriz_id),
+                    deleted_at__isnull=True  # Garante apenas notas não deletadas
+                )
+
+                # Pega apenas os IDs das notas fiscais
+                nota_fiscal_ids = notas_fiscais.values_list('id', flat=True)
+
+                # Retorna emitentes dessas notas fiscais
+                return models.Emitente.objects.filter(
+                    nota_fiscal_id__in=nota_fiscal_ids
+                ).distinct()
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Emitente.objects.none()
-
-        # Primeiro filtra as notas fiscais permitidas
-        notas_fiscais = models.NotaFiscal.objects.filter(
-            Q(empresa=matriz_id) |
-            Q(empresa__matriz_filial=matriz_id),
-            deleted_at__isnull=True  # Garante apenas notas não deletadas
-        )
-
-        # Pega apenas os IDs das notas fiscais
-        nota_fiscal_ids = notas_fiscais.values_list('id', flat=True)
-
-        # Retorna emitentes dessas notas fiscais
-        return models.Emitente.objects.filter(
-            nota_fiscal_id__in=nota_fiscal_ids
-        ).distinct()
 
 
 @extend_schema_view(
@@ -2734,21 +2897,21 @@ class NfeTodosFornecedorListAPIView(generics.ListAPIView):
         summary="02 Listar fornecedores/emitentes da matriz",
         description="""
         Retorna todos os fornecedores (emitentes) das notas fiscais da matriz.
-        
+
         **Características:**
         - Lista apenas fornecedores das notas fiscais da matriz
         - Inclui dados relacionados das notas fiscais
         - Aplica filtros específicos para fornecedores
         - Retorna dados paginados
         - Ordenado por data de emissão (mais recente primeiro) e nome do fornecedor
-        
+
         **Informações do emitente:**
         - Dados cadastrais (CNPJ, razão social, nome fantasia)
         - Inscrição estadual (IE) e regime tributário (CRT)
         - Endereço completo (logradouro, número, bairro, cidade, UF, CEP)
         - Contato (telefone)
         - Dados relacionados da nota fiscal
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -2851,41 +3014,93 @@ class NfeTodosFornecedorListAPIView(generics.ListAPIView):
 )
 class NfeFornecedorMatrizListAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = EmitenteModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = FornecedorFilter
     pagination_class = utils.CustomPageSizePagination
+
+    # filterset_class = FornecedorFilter
+    # serializer_class = EmitenteModelSerializer
+
+    @property
+    def filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            return FornecedorFilterFlat if DatabaseManager.empresa_tem_banco_proprio(matriz_id) else FornecedorFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return FornecedorFilter
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                return EmitenteFlatModelSerializer
+            else:
+                return EmitenteModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return EmitenteModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Emitente.objects.none()
 
-        user = self.request.user
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
-        if not matriz_id:
-            # Retorna queryset vazio se não encontrar empresa
+            if not matriz_id:
+                # Retorna queryset vazio se não encontrar empresa
+                return models.Emitente.objects.none()
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        # Busca notas da matriz e de todas as filiais
+                        notas_fiscais_ids = NotaFiscalFlat.objects.filter(
+                            empresa_id=matriz_id,
+                            deleted_at__isnull=True
+                        ).values_list('id', flat=True)
+
+                        # Depois buscamos os produtos dessas notas
+                        return EmitenteFlat.objects.filter(
+                            nota_fiscal_id__in=notas_fiscais_ids
+                        ).distinct()
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return EmitenteFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return ProdutoFlat.objects.none()
+            else:
+                # Cria o queryset base de Emitentes
+                emitentes = models.Emitente.objects.filter(
+                    nota_fiscal__empresa=matriz_id,
+                    nota_fiscal__deleted_at__isnull=True
+                ).select_related(
+                    'nota_fiscal',
+                    'nota_fiscal__ide',
+                    'nota_fiscal__emitente',
+                    'nota_fiscal__destinatario'
+                )
+
+                return emitentes.order_by('-nota_fiscal__dhEmi', 'xNome')
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Emitente.objects.none()
-
-        # Cria o queryset base de Emitentes
-        emitentes = models.Emitente.objects.filter(
-            nota_fiscal__empresa=matriz_id,
-            nota_fiscal__deleted_at__isnull=True
-        ).select_related(
-            'nota_fiscal',
-            'nota_fiscal__ide',
-            'nota_fiscal__emitente',
-            'nota_fiscal__destinatario'
-        )
-
-        return emitentes.order_by('-nota_fiscal__dhEmi', 'xNome')
 
 
 @extend_schema_view(
@@ -2895,7 +3110,7 @@ class NfeFornecedorMatrizListAPIView(generics.ListAPIView):
         summary="03 Listar fornecedores/emitentes de uma filial",
         description="""
         Retorna todos os fornecedores (emitentes) das notas fiscais de uma filial específica.
-        
+
         **Características:**
         - Lista apenas fornecedores das notas fiscais da filial especificada
         - Valida se a filial pertence à matriz do usuário
@@ -2904,12 +3119,12 @@ class NfeFornecedorMatrizListAPIView(generics.ListAPIView):
         - Aplica filtros específicos para fornecedores
         - Retorna dados paginados
         - Ordenado por data de emissão (mais recente primeiro) e nome do fornecedor
-        
+
         **Validações:**
         - Documento (CNPJ) da filial é obrigatório
         - Filial deve pertencer à matriz do usuário
         - Filial deve estar com status ativo
-        
+
         **Permissões requeridas:**
         - Usuário autenticado
         - Acesso via funcionário ativo ou proprietário da empresa
@@ -3037,55 +3252,113 @@ class NfeFornecedorMatrizListAPIView(generics.ListAPIView):
 )
 class NfeFornecedorFilialListAPIView(generics.ListAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = EmitenteModelSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_class = FornecedorFilter
     pagination_class = utils.CustomPageSizePagination
+
+    # filterset_class = FornecedorFilter
+    # serializer_class = EmitenteModelSerializer
+
+    @property
+    def filterset_class(self):
+        """Retorna o filterset correto baseado no banco sendo usado"""
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            return FornecedorFilterFlat if DatabaseManager.empresa_tem_banco_proprio(matriz_id) else FornecedorFilter
+        except Exception as e:
+            print(f"Erro ao determinar filterset: {e}")
+            return FornecedorFilter
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                return EmitenteFlatModelSerializer
+            else:
+                return EmitenteModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return EmitenteModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Emitente.objects.none()
 
-        user = self.request.user
-        documento = self.kwargs.get('documento', None)
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            documento = self.kwargs.get('documento', None)
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
-        if not documento:
-            raise ValidationError({'documento': 'Documento é obrigatório'})
+            if not documento:
+                raise ValidationError({'documento': 'Documento é obrigatório'})
 
-        if not matriz_id:
-            # Retorna queryset vazio se não encontrar empresa
+            if not matriz_id:
+                # Retorna queryset vazio se não encontrar empresa
+                return models.Emitente.objects.none()
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                # Busca todas as filiais ativas da matriz
+                filial = Empresa.objects.filter(
+                    matriz_filial_id=matriz_id,
+                    documento=documento,
+                    status='1'
+                ).first()
+
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        notas_fiscais_ids = NotaFiscalFlat.objects.filter(
+                            empresa_id=filial.id,
+                            deleted_at__isnull=True
+                        ).values_list('id', flat=True)
+
+                        # Depois buscamos os produtos dessas notas
+                        return EmitenteFlat.objects.filter(
+                            nota_fiscal_id__in=notas_fiscais_ids
+                        ).distinct()
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return EmitenteFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return ProdutoFlat.objects.none()
+            else:
+                # Verifica se a filial existe e pertence à matriz
+                filial = Empresa.objects.filter(
+                    documento=documento,
+                    matriz_filial=matriz_id,
+                    status='1'
+                ).first()
+
+                if not filial:
+                    raise NotFound(detail="A filial não foi encontrada.")
+
+                # Cria o queryset base de Emitentes
+                emitentes = models.Emitente.objects.filter(
+                    nota_fiscal__empresa=filial,  # Usa o ID da filial encontrada
+                    nota_fiscal__deleted_at__isnull=True
+                ).select_related(
+                    'nota_fiscal',
+                    'nota_fiscal__ide',
+                    'nota_fiscal__emitente',
+                    'nota_fiscal__destinatario'
+                )
+
+                return emitentes.order_by('-nota_fiscal__dhEmi', 'xNome')
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Emitente.objects.none()
-
-        # Verifica se a filial existe e pertence à matriz
-        filial = Empresa.objects.filter(
-            documento=documento,
-            matriz_filial=matriz_id,
-            status='1'
-        ).first()
-
-        if not filial:
-            raise NotFound(detail="A filial não foi encontrada.")
-
-        # Cria o queryset base de Emitentes
-        emitentes = models.Emitente.objects.filter(
-            nota_fiscal__empresa=filial,  # Usa o ID da filial encontrada
-            nota_fiscal__deleted_at__isnull=True
-        ).select_related(
-            'nota_fiscal',
-            'nota_fiscal__ide',
-            'nota_fiscal__emitente',
-            'nota_fiscal__destinatario'
-        )
-
-        return emitentes.order_by('-nota_fiscal__dhEmi', 'xNome')
 
 
 @extend_schema_view(
@@ -3225,32 +3498,69 @@ class NfeFornecedorFilialListAPIView(generics.ListAPIView):
 )
 class NfeFornecedorRetrieveAPIView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
-    serializer_class = EmitenteModelSerializer
     lookup_field = 'pk'  # Já é o padrão, mas explícito é melhor
+
+    # serializer_class = EmitenteModelSerializer
+
+    def get_serializer_class(self):
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                return EmitenteFlatModelSerializer
+            else:
+                return EmitenteModelSerializer
+        except Exception as e:
+            print(f"Erro ao determinar serializer: {e}")
+            return EmitenteModelSerializer  # Fallback para serializer padrão
 
     def get_queryset(self):
         # Evita erro na geração da documentação Swagger
         if getattr(self, 'swagger_fake_view', False):
             return models.Emitente.objects.none()
 
-        user = self.request.user
-        matriz_id = utils.obter_matriz_funcionario(user)
+        try:
+            user = self.request.user
+            matriz_id = utils.obter_matriz_funcionario(user)
 
-        verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
-        if not verificaEmpresa:
-            raise PermissionDenied(
-                detail="A empresa vinculada à sua conta está desativada, contate um administrador."
-            )
+            verificaEmpresa = utils.verificaRestricaoAdministrativa(matriz_id, 3)
+            if not verificaEmpresa:
+                raise PermissionDenied(
+                    detail="A empresa vinculada à sua conta está desativada, contate um administrador."
+                )
 
-        if not matriz_id:
+            if not matriz_id:
+                return models.Emitente.objects.none()
+
+            if DatabaseManager.empresa_tem_banco_proprio(matriz_id):
+                try:
+                    if DatabaseManager.usar_banco_empresa(matriz_id):
+                        emitente = EmitenteFlat.objects.filter(
+                            id=self.kwargs.get('pk'),
+                            nota_fiscal_id__in=NotaFiscalFlat.objects.filter(
+                                empresa_id=matriz_id
+                            ).values('id')
+                        )
+                        return emitente
+                    else:
+                        # Se não conseguiu conectar no banco da empresa, retorna vazio
+                        return EmitenteFlat.objects.none()
+                except Exception as e:
+                    print(f"Erro ao conectar banco empresa: {e}")
+                    return EmitenteFlat.objects.none()
+            else:
+                # Filtra emitentes pela empresa da matriz ou suas filiais
+                return models.Emitente.objects.filter(
+                    Q(nota_fiscal__empresa=matriz_id) |
+                    Q(nota_fiscal__empresa__matriz_filial=matriz_id),
+                    nota_fiscal__deleted_at__isnull=True  # Garante apenas notas não deletadas
+                )
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"Erro geral no queryset: {e}")
             return models.Emitente.objects.none()
-
-        # Filtra emitentes pela empresa da matriz ou suas filiais
-        return models.Emitente.objects.filter(
-            Q(nota_fiscal__empresa=matriz_id) |
-            Q(nota_fiscal__empresa__matriz_filial=matriz_id),
-            nota_fiscal__deleted_at__isnull=True  # Garante apenas notas não deletadas
-        )
 
 
 ###################################################

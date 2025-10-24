@@ -2,8 +2,8 @@
     Execute isso em uma migration customizada ou shell do Django
     
     python manage.py shell
-    >>> from empresa.utils.popular_categorias import popular_categorias
-    >>> popular_categorias()
+    from empresa.utils.popular_categorias import popular_categorias
+    popular_categorias()
 """
 from empresa.models import CategoriaEmpresa
 

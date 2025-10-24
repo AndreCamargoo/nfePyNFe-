@@ -1,7 +1,7 @@
 """
     python manage.py shell
-    >>> from sistema.utils.popular_urls import popular_rotas  # ajuste o caminho
-    >>> popular_rotas()
+    from sistema.utils.popular_urls import popular_rotas
+    popular_rotas()
 """
 from sistema.models import RotaSistema
 
@@ -14,7 +14,7 @@ def popular_rotas():
             "nome": "Listar sistemas disponíveis",
             "path": "/api/v1/sistemas/",
             "metodo": "GET",
-            "descricao": "    Retorna uma lista de todos os sistemas cadastrados no sistema."
+            "descricao": "Retorna uma lista de todos os sistemas cadastrados no sistema."
         },
         # Rotas do Sistema
         {

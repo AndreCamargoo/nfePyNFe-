@@ -140,3 +140,17 @@ class ProdutoFilterFlat(django_filters.FilterSet):
             nota_qs = nota_qs.filter(dhEmi__lte=value.stop)
         nota_ids = nota_qs.values_list('id', flat=True)
         return queryset.filter(nota_fiscal_id__in=nota_ids)
+
+
+class FornecedorFilterFlat(django_filters.FilterSet):
+    CNPJ = django_filters.CharFilter(field_name='CNPJ', lookup_expr='icontains')
+    xNome = django_filters.CharFilter(field_name='xNome', lookup_expr='icontains')
+    q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
+
+    class Meta:
+        model = EmitenteFlat
+        fields = ['CNPJ', 'xNome']
+
+    def filter_by_q(self, queryset, name, value):
+        filters = Q(CNPJ__icontains=value) | Q(xNome__icontains=value)
+        return queryset.filter(filters)
