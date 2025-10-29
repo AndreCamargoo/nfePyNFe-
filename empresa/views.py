@@ -219,6 +219,7 @@ class CategoriaEmpresaListCreateAPIView(generics.ListCreateAPIView):
     queryset = CategoriaEmpresa.objects.all()
     serializer_class = CategoriaEmpresaModelSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_permissions(self):
         if self.request.method == 'POST':
