@@ -177,6 +177,17 @@ class EmpresaListCreateAPIView(EmpresaBaseView, generics.ListCreateAPIView):
     ),
 )
 class EmpresaRetrieveUpdateDestroyAPIView(EmpresaBaseView, generics.RetrieveUpdateDestroyAPIView):
+    """
+    Permite recuperar, atualizar ou deletar apenas empresas
+    pertencentes ao usuário autenticado.
+    """
+
+    def get_queryset(self):
+        """
+        Filtra para retornar apenas empresas do usuário logado.
+        """
+        user = self.request.user
+        return Empresa.objects.filter(usuario=user)
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
