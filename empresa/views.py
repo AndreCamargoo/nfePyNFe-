@@ -187,7 +187,10 @@ class EmpresaRetrieveUpdateDestroyAPIView(EmpresaBaseView, generics.RetrieveUpda
         Filtra para retornar apenas empresas do usuário logado.
         """
         user = self.request.user
-        return Empresa.objects.filter(usuario=user)
+        pk = self.kwargs.get('pk')  # Pega o pk da URL
+
+        # Filtra por usuário E pelo ID da empresa (pk da URL)
+        return Empresa.objects.filter(usuario=user, pk=pk)
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
