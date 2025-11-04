@@ -176,21 +176,21 @@ class EmpresaListCreateAPIView(EmpresaBaseView, generics.ListCreateAPIView):
         },
     ),
 )
-class EmpresaRetrieveUpdateDestroyAPIView(EmpresaBaseView, generics.RetrieveUpdateDestroyAPIView):
+class EmpresaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     """
     Permite recuperar, atualizar ou deletar apenas empresas
     pertencentes ao usuário autenticado.
     """
 
-    def get_queryset(self):
-        """
-        Filtra para retornar apenas empresas do usuário logado.
-        """
-        user = self.request.user
-        pk = self.kwargs.get('pk')  # Pega o pk da URL
+    def get_permissions(self):
+        if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            return [IsAuthenticated(), UsuarioIndependenteOuAdmin()]
+        return [IsAuthenticated()]
 
-        # Filtra por usuário E pelo ID da empresa (pk da URL)
-        return Empresa.objects.filter(usuario=user, pk=pk)
+    def get_queryset(self):
+        user = self.request.user
+        pk = self.kwargs.get('pk')
+        return Empresa.objects.filter(pk=pk)
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -233,6 +233,7 @@ class CategoriaEmpresaListCreateAPIView(generics.ListCreateAPIView):
     queryset = CategoriaEmpresa.objects.all()
     serializer_class = CategoriaEmpresaModelSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_permissions(self):
         if self.request.method == 'POST':

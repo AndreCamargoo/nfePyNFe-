@@ -159,7 +159,7 @@ class NFeBaseView:
                 return self._get_queryset_banco_empresa(empresa)
             else:
                 # Empresa não tem banco próprio → usa modelos NORMAIS
-                print(f"Usando banco DEFAULT para: {empresa.razao_social}")
+                print(f"Usando banco DEFAULT para: {empresa.id}")
                 return self._get_queryset_banco_default(empresa)
         except Exception as e:
             print(f"Erro ao determinar banco: {e}")
@@ -3260,8 +3260,17 @@ class NfeFaturamentoAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
-        # Empresa associada ao usuário
-        empresa_id = request.user.id
+        # Acessar através do related_name 'empresas'
+        empresas = request.user.empresas.all()
+
+        # Pegar a primeira empresa (ou matriz)
+        empresa = empresas.first()
+
+        if not empresa:
+            return response.Response({"error": "Nenhuma empresa encontrada para este usuário"}, status=404)
+
+        # Agora use o ID da empresa para buscar as notas fiscais
+        empresa_id = empresa.id
 
         # Mês e ano atual (ou via query param se desejar flexibilidade)
         now = datetime.now()
@@ -3289,8 +3298,17 @@ class NfeFaturamentoMesAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
-        # Empresa associada ao usuário
-        empresa_id = request.user.id
+        # Acessar através do related_name 'empresas'
+        empresas = request.user.empresas.all()
+
+        # Pegar a primeira empresa (ou matriz)
+        empresa = empresas.first()
+
+        if not empresa:
+            return response.Response({"error": "Nenhuma empresa encontrada para este usuário"}, status=404)
+
+        # Agora use o ID da empresa para buscar as notas fiscais
+        empresa_id = empresa.id
 
         # Ano atual (ou via query param se desejar flexibilidade)
         now = datetime.now()
@@ -3317,8 +3335,17 @@ class NfeProdutosAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
-        # Empresa associada ao usuário
-        empresa_id = request.user.id
+        # Acessar através do related_name 'empresas'
+        empresas = request.user.empresas.all()
+
+        # Pegar a primeira empresa (ou matriz)
+        empresa = empresas.first()
+
+        if not empresa:
+            return response.Response({"error": "Nenhuma empresa encontrada para este usuário"}, status=404)
+
+        # Agora use o ID da empresa para buscar as notas fiscais
+        empresa_id = empresa.id
 
         order = str(request.query_params.get("order", ""))
         limit = request.query_params.get("limit")
