@@ -67,8 +67,8 @@ else:
         "https://allnube.com.br",
         "https://www.allnube.com.br",
         "https://api.allnube.com.br",
-        'https://agendagrupo.azevedo.cnt.br',
-        'https://www.agendagrupo.azevedo.cnt.br',
+        "https://agendagrupo.azevedo.cnt.br",
+        "https://www.agendagrupo.azevedo.cnt.br",
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
