@@ -1,6 +1,5 @@
 from django.db import models
 
-
 ESTADOS_CHOICES = (
     ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
     ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'),
@@ -24,7 +23,31 @@ ORIGEM_LEAD_CHOICES = (
 )
 
 
+class EventoContato(models.Model):
+    nome = models.CharField(max_length=255)
+    cargo = models.CharField(max_length=100)
+    email = models.EmailField(max_length=254)
+    telefone = models.CharField(max_length=15)
+    origem_lead = models.CharField(max_length=20, choices=ORIGEM_LEAD_CHOICES)
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default='1')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'agenda_evento_contato'
+        verbose_name = 'Evento de Contato'
+        verbose_name_plural = 'Eventos de Contato'
+
+    def __str__(self):
+        return self.nome
+
+
 class EventoCadastroEmpresa(models.Model):
+    contato = models.ForeignKey(
+        EventoContato,
+        on_delete=models.CASCADE,
+        related_name='empresas'
+    )
     documento = models.CharField(max_length=18, unique=True)
     nome_empresa = models.CharField(max_length=255)
     telefone = models.CharField(max_length=15)
@@ -43,27 +66,3 @@ class EventoCadastroEmpresa(models.Model):
 
     def __str__(self):
         return f"{self.nome_empresa} - {self.documento}"
-
-
-class EventoContato(models.Model):
-    empresa = models.ForeignKey(
-        EventoCadastroEmpresa,
-        on_delete=models.CASCADE,
-        related_name='contatos'
-    )
-    nome = models.CharField(max_length=255)
-    cargo = models.CharField(max_length=100)
-    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default='1')
-    email = models.EmailField(max_length=254)
-    telefone = models.CharField(max_length=15)
-    origem_lead = models.CharField(max_length=20, choices=ORIGEM_LEAD_CHOICES)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'agenda_evento_contato'
-        verbose_name = 'Evento de Contato'
-        verbose_name_plural = 'Eventos de Contato'
-
-    def __str__(self):
-        return f"{self.nome} ({self.empresa.nome_empresa})"

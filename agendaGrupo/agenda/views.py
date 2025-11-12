@@ -37,6 +37,7 @@ class EventoContatoListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = []
     serializer_class = EventoContatoModelSerializer
     queryset = EventoContato.objects.all()
+    pagination_class = utils.CustomPageSizePagination
 
 
 class EventoContatoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
