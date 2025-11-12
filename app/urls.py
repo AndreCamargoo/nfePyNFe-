@@ -22,6 +22,9 @@ urlpatterns = [
     path('api/v1/', include('nfe_resumo.urls')),
     path('api/v1/', include('apexcharts.urls')),
 
+    # Agenda rotas e modulos
+    path('api/v1/', include('agendaGrupo.agenda.urls')),
+
     # YOUR PATTERNS
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Optional UI:

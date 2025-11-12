@@ -15,6 +15,7 @@ load_dotenv()
 
 API_USERNAME = os.getenv('API_USERNAME')
 API_PASSWORD = os.getenv('API_PASSWORD')
+DOWNLOAD_AGENDA = os.getenv('DOWNLOAD_AGENDA')
 API_URL = os.getenv('API_URL')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -129,6 +130,7 @@ INSTALLED_APPS = [
     'empresa',
     'apexcharts',
     'sistema',
+    'agendaGrupo.agenda',
 
     # App para controlar migracoes de banco empresas
     'db_allnube_empresa',
