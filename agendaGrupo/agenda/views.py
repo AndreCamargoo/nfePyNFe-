@@ -20,6 +20,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
 
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+
+
 class EventoCadastroListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = []
     serializer_class = EventoCadastroEmpresaModelSerializer
@@ -54,13 +58,16 @@ class EventoDownload(generics.GenericAPIView):
         data_inicial = request.data.get('data_inicial')
         data_final = request.data.get('data_final')
         senha = request.data.get('senha')
+        tipo = request.data.get('tipo', 'pdf').lower()
 
-        if not senha or senha != settings.DOWNLOAD_AGENDA:
-            return Response(
-                {"error": "Senha inválida ou não informada."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        # Verifica senha
+        # if not senha or senha != settings.DOWNLOAD_AGENDA:
+        #     return Response(
+        #         {"error": "Senha inválida ou não informada."},
+        #         status=status.HTTP_403_FORBIDDEN
+        #     )
 
+        # Valida datas
         if not data_inicial or not data_final:
             return Response(
                 {"error": "Os campos 'data_inicial' e 'data_final' são obrigatórios."},
@@ -76,10 +83,11 @@ class EventoDownload(generics.GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Busca registros
         queryset = EventoCadastroEmpresa.objects.filter(
             created_at__date__gte=data_inicial,
             created_at__date__lte=data_final
-        ).prefetch_related('contatos')
+        ).select_related('contato')
 
         if not queryset.exists():
             return Response(
@@ -87,46 +95,130 @@ class EventoDownload(generics.GenericAPIView):
                 status=status.HTTP_204_NO_CONTENT
             )
 
-        # Serializa e gera PDF
         serializer = self.get_serializer(queryset, many=True)
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
-        styles = getSampleStyleSheet()
-        elements = []
 
-        elements.append(Paragraph("<b>Relatório de Cadastros de Empresas</b>", styles['Title']))
-        elements.append(Paragraph(f"Período: {data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}", styles['Normal']))
-        elements.append(Spacer(1, 20))
+        # ===============================
+        # GERAÇÃO DE PDF
+        # ===============================
+        if tipo == 'pdf':
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4)
+            styles = getSampleStyleSheet()
+            elements = []
 
-        for empresa in serializer.data:
-            elements.append(Paragraph(f"<b>{empresa['nome_empresa']}</b> ({empresa['documento']})", styles['Heading3']))
-            elements.append(Paragraph(f"Endereço: {empresa['endereco']}, {empresa['cidade']} - {empresa['uf']}", styles['Normal']))
-            elements.append(Paragraph(f"Email: {empresa['email']} | Telefone: {empresa['telefone']}", styles['Normal']))
-            elements.append(Paragraph(f"Status: {'Ativo' if empresa['status'] == '1' else 'Inativo'}", styles['Normal']))
-            elements.append(Spacer(1, 10))
+            elements.append(Paragraph("<b>Relatório de Cadastros de Empresas</b>", styles['Title']))
+            elements.append(Paragraph(
+                f"Período: {data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}",
+                styles['Normal']
+            ))
+            elements.append(Spacer(1, 20))
 
-            contatos = empresa.get('contatos', [])
-            if contatos:
-                table_data = [['Nome', 'Cargo', 'Email', 'Telefone', 'Origem']]
-                for c in contatos:
+            for empresa in serializer.data:
+                contato = empresa.get('contato')
+
+                # Contato primeiro
+                if contato:
+                    elements.append(Paragraph("<b>Contato Vinculado</b>", styles['Heading3']))
+                    table_data = [['Nome', 'Cargo', 'Email', 'Telefone', 'Origem']]
                     table_data.append([
-                        c['nome'], c['cargo'], c['email'], c['telefone'], c['origem_lead']
+                        contato['nome'],
+                        contato['cargo'],
+                        contato['email'],
+                        contato['telefone'],
+                        contato['origem_lead'],
                     ])
-                table = Table(table_data, colWidths=[100, 80, 130, 80, 70])
-                table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ]))
-                elements.append(table)
-                elements.append(Spacer(1, 20))
-            else:
-                elements.append(Paragraph("<i>Sem contatos cadastrados.</i>", styles['Italic']))
+                    table = Table(table_data, colWidths=[100, 80, 130, 80, 70])
+                    table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ]))
+                    elements.append(table)
+                    elements.append(Spacer(1, 10))
+                else:
+                    elements.append(Paragraph("<i>Sem contato vinculado.</i>", styles['Italic']))
+                    elements.append(Spacer(1, 10))
+
+                # Empresa depois
+                elements.append(Paragraph(
+                    f"<b>{empresa['nome_empresa']}</b> ({empresa['documento']})",
+                    styles['Heading3']
+                ))
+                elements.append(Paragraph(
+                    f"Endereço: {empresa['endereco']}, {empresa['cidade']} - {empresa['uf']}",
+                    styles['Normal']
+                ))
+                elements.append(Paragraph(
+                    f"Email: {empresa['email']} | Telefone: {empresa['telefone']}",
+                    styles['Normal']
+                ))
+                elements.append(Paragraph(
+                    f"Status: {'Ativo' if empresa['status'] == '1' else 'Inativo'}",
+                    styles['Normal']
+                ))
                 elements.append(Spacer(1, 20))
 
-        doc.build(elements)
-        pdf = buffer.getvalue()
-        buffer.close()
+            doc.build(elements)
+            pdf = buffer.getvalue()
+            buffer.close()
 
-        response = HttpResponse(pdf, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="relatorio_cadastros_{data_inicial.strftime("%Y%m%d")}_{data_final.strftime("%Y%m%d")}.pdf"'
-        return response
+            filename = f"relatorio_cadastros_{data_inicial.strftime('%Y%m%d')}_{data_final.strftime('%Y%m%d')}.pdf"
+            response = HttpResponse(pdf, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+
+        # ===============================
+        # GERAÇÃO DE XLSX
+        # ===============================
+        elif tipo == 'xlsx':
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Cadastros de Empresas"
+
+            headers = [
+                "Nome Empresa", "Documento", "Endereço", "Cidade", "UF",
+                "Email Empresa", "Telefone Empresa", "Status",
+                "Nome Contato", "Cargo", "Email Contato", "Telefone Contato", "Origem Lead"
+            ]
+            ws.append(headers)
+
+            for empresa in serializer.data:
+                contato = empresa.get('contato') or {}
+                ws.append([
+                    empresa['nome_empresa'],
+                    empresa['documento'],
+                    empresa['endereco'],
+                    empresa['cidade'],
+                    empresa['uf'],
+                    empresa['email'],
+                    empresa['telefone'],
+                    'Ativo' if empresa['status'] == '1' else 'Inativo',
+                    contato.get('nome', ''),
+                    contato.get('cargo', ''),
+                    contato.get('email', ''),
+                    contato.get('telefone', ''),
+                    contato.get('origem_lead', '')
+                ])
+
+            # Ajusta largura automática das colunas
+            for col in ws.columns:
+                max_length = max((len(str(cell.value)) for cell in col if cell.value), default=0)
+                ws.column_dimensions[get_column_letter(col[0].column)].width = max_length + 2
+
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+
+            filename = f"relatorio_cadastros_{data_inicial.strftime('%Y%m%d')}_{data_final.strftime('%Y%m%d')}.xlsx"
+            response = HttpResponse(
+                buffer.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+
+        # Caso formato não reconhecido
+        else:
+            return Response(
+                {"error": "Tipo de arquivo inválido. Use 'pdf' ou 'xlsx'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )

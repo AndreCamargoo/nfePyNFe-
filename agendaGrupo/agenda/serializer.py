@@ -2,16 +2,16 @@ from rest_framework import serializers
 from .models import EventoCadastroEmpresa, EventoContato
 
 
-class EventoCadastroEmpresaModelSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EventoCadastroEmpresa
-        fields = '__all__'
-
-
 class EventoContatoModelSerializer(serializers.ModelSerializer):
-    # Mostra todas as empresas relacionadas ao contato
-    empresas = EventoCadastroEmpresaModelSerializer(many=True, read_only=True)
-
     class Meta:
         model = EventoContato
+        fields = ['id', 'nome', 'cargo', 'email', 'telefone', 'origem_lead', 'status']
+
+
+class EventoCadastroEmpresaModelSerializer(serializers.ModelSerializer):
+    # Expande o relacionamento FK — inclui os dados do contato completo
+    contato = EventoContatoModelSerializer(read_only=True)
+
+    class Meta:
+        model = EventoCadastroEmpresa
         fields = '__all__'
