@@ -82,6 +82,7 @@ class Empresa(models.Model):
             Funcionario.objects.create(
                 user=self.usuario,
                 empresa=self,
+                status=1,
                 role=Funcionario.ADMIN
             )
 

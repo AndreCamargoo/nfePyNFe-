@@ -66,7 +66,7 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
         user = self.context['request'].user
         matriz_filial = attrs.get('matriz_filial', None)
         sistema = attrs.get('sistema', None)
-        categoria = attrs.get('categoria', 1)
+        categoria = attrs.get('categoria')
 
         # Sistema é obrigatório
         if sistema is None:
@@ -77,7 +77,7 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
             raise ValidationError({"categoria": "O campo categoria é obrigatório."})
 
         # Validação da categoria
-        if not CategoriaEmpresa.objects.filter(pk=categoria).exists():
+        if not CategoriaEmpresa.objects.filter(pk=categoria.pk).exists():
             raise ValidationError({"categoria": "A categoria indicada não existe."})
 
         # Se for filial
