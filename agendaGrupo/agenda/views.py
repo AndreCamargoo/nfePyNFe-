@@ -23,6 +23,10 @@ from reportlab.lib import colors
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
+from rest_framework.parsers import MultiPartParser
+from rest_framework.views import APIView
+from openpyxl import load_workbook
+
 
 class EventoCadastroListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = []
@@ -48,6 +52,109 @@ class EventoContatoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAP
     permission_classes = [IsAuthenticated, IsAdminUser]
     serializer_class = EventoContatoModelSerializer
     queryset = EventoContato.objects.all()
+
+
+class EventoImportXLSX(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, *args, **kwargs):
+        arquivo = request.FILES.get("arquivo")
+
+        if not arquivo:
+            return Response({"error": "Arquivo XLSX não enviado."}, status=400)
+
+        try:
+            wb = load_workbook(filename=arquivo)
+            ws = wb.active
+        except:
+            return Response({"error": "Erro ao ler o arquivo XLSX."}, status=400)
+
+        # Cabeçalhos esperados (exatamente igual o arquivo de exportação)
+        headers_esperados = [
+            "Nome Empresa", "Documento", "Endereço", "Cidade", "UF",
+            "Email Empresa", "Telefone Empresa", "Status",
+            "Nome Contato", "Cargo", "Email Contato", "Telefone Contato", "Origem Lead"
+        ]
+
+        headers_arquivo = [cell.value for cell in ws[1]]
+
+        if headers_arquivo != headers_esperados:
+            return Response({
+                "error": "O arquivo XLSX não possui o layout esperado.",
+                "esperado": headers_esperados,
+                "recebido": headers_arquivo
+            }, status=400)
+
+        importados = []
+        erros = []
+
+        for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            try:
+                (
+                    nome_empresa, documento, endereco, cidade, uf,
+                    email_empresa, telefone_empresa, status_empresa,
+                    nome_contato, cargo_contato, email_contato,
+                    telefone_contato, origem_lead
+                ) = row
+
+                # ==========================
+                # IMPORTA CONTATO
+                # ==========================
+                contato, created_c = EventoContato.objects.get_or_create(
+                    email=email_contato,
+                    defaults={
+                        "nome": nome_contato,
+                        "cargo": cargo_contato,
+                        "telefone": telefone_contato,
+                        "origem_lead": origem_lead,
+                        "status": "1"
+                    }
+                )
+
+                # Atualiza caso exista
+                if not created_c:
+                    contato.nome = nome_contato
+                    contato.cargo = cargo_contato
+                    contato.telefone = telefone_contato
+                    contato.origem_lead = origem_lead
+                    contato.save()
+
+                # ==========================
+                # IMPORTA EMPRESA
+                # ==========================
+                empresa, created_e = EventoCadastroEmpresa.objects.update_or_create(
+                    documento=documento,
+                    defaults={
+                        "nome_empresa": nome_empresa,
+                        "endereco": endereco,
+                        "cidade": cidade,
+                        "uf": uf,
+                        "email": email_empresa,
+                        "telefone": telefone_empresa,
+                        "status": "1" if status_empresa == "Ativo" else "2",
+                        "contato": contato,
+                    }
+                )
+
+                importados.append({
+                    "linha": idx,
+                    "empresa": empresa.nome_empresa,
+                    "contato": contato.nome,
+                    "created_empresa": created_e,
+                    "created_contato": created_c
+                })
+
+            except Exception as e:
+                erros.append({"linha": idx, "erro": str(e)})
+
+        return Response({
+            "message": "Importação concluída",
+            "total_importados": len(importados),
+            "total_erros": len(erros),
+            "itens_importados": importados,
+            "erros": erros
+        })
 
 
 class EventoDownload(generics.GenericAPIView):
