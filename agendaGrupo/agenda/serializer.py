@@ -9,8 +9,9 @@ class EventoContatoModelSerializer(serializers.ModelSerializer):
 
 
 class EventoCadastroEmpresaModelSerializer(serializers.ModelSerializer):
-    # Expande o relacionamento FK — inclui os dados do contato completo
-    contato = EventoContatoModelSerializer(read_only=True)
+    contato = serializers.PrimaryKeyRelatedField(
+        queryset=EventoContato.objects.all()
+    )
 
     class Meta:
         model = EventoCadastroEmpresa

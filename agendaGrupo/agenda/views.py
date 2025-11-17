@@ -158,7 +158,7 @@ class EventoImportXLSX(APIView):
 
 
 class EventoDownload(generics.GenericAPIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
     serializer_class = EventoCadastroEmpresaModelSerializer
 
     def post(self, request, *args, **kwargs):
