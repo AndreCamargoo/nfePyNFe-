@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from .models import EventoCadastroEmpresa, EventoContato
-from .serializer import (EventoCadastroEmpresaModelSerializer, EventoContatoModelSerializer)
+from .serializer import (EventoCadastroEmpresaModelSerializer, EventoContatoModelSerializer, EventoCadastroEmpresaDownloadSerializer)
 
 from app.utils import utils
 
@@ -159,7 +159,7 @@ class EventoImportXLSX(APIView):
 
 class EventoDownload(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = EventoCadastroEmpresaModelSerializer
+    serializer_class = EventoCadastroEmpresaDownloadSerializer
 
     def post(self, request, *args, **kwargs):
         data_inicial = request.data.get('data_inicial')

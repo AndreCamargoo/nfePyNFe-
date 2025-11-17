@@ -16,3 +16,11 @@ class EventoCadastroEmpresaModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventoCadastroEmpresa
         fields = '__all__'
+
+
+class EventoCadastroEmpresaDownloadSerializer(serializers.ModelSerializer):
+    contato = EventoContatoModelSerializer(read_only=True)
+
+    class Meta:
+        model = EventoCadastroEmpresa
+        fields = '__all__'
