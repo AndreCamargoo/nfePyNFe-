@@ -212,8 +212,8 @@ class Funcionario(models.Model):
         (FUNCIONARIO, 'Funcionário'),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='funcionarios')
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='funcionarios_empresa')
     role = models.CharField(max_length=15, choices=ROLE_CHOICES)
     status = models.CharField(max_length=1, choices=STATUS_CHOICES)
     criado_em = models.DateTimeField(auto_now_add=True)

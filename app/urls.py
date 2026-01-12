@@ -25,6 +25,11 @@ urlpatterns = [
     # Agenda rotas e modulos
     path('api/v1/', include('agendaGrupo.agenda.urls')),
 
+    # Cloud rotas e modulos
+    path('api/v1/', include('cloud.circularizacao.urls')),
+    path('api/v1/', include('cloud.cliente.urls')),
+    path('api/v1/', include('cloud.segmento.urls')),
+
     # YOUR PATTERNS
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Optional UI:
@@ -33,6 +38,7 @@ urlpatterns = [
 ]
 
 # + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

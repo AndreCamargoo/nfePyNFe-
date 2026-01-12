@@ -1,9 +1,11 @@
 from django.db.models import Q
+from django.contrib.auth.models import User
 
 from rest_framework import generics
+from rest_framework.views import APIView
 
 from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -13,9 +15,9 @@ from empresa.models import (
 )
 from empresa.serializer import (
     EmpresaModelSerializer, EmpresaCreateSerializer, EmpresaUpdateSerializer, EmpresaListSerializer,
-    CategoriaEmpresaModelSerializer, ConexaoBancoModelSerializer,
-    FuncionarioListSerializer, FuncionarioSerializer,
-    FuncionarioRotaModelSerializer
+    EmpresaAllModelSerializer, CategoriaEmpresaModelSerializer, ConexaoBancoModelSerializer,
+    FuncionarioListSerializer, FuncionarioSerializer, FuncionarioAllModelSerializer,
+    FuncionarioRotaModelSerializer, CriacaoEmpresaFuncionarioSerializer, EmpresaAdminDetailSerializer
 )
 
 from app.permissions import GlobalDefaultPermission, UsuarioIndependenteOuAdmin
@@ -213,6 +215,13 @@ class EmpresaPorUsuarioAPIView(generics.RetrieveAPIView):
             return Empresa.objects.get(usuario=user, matriz_filial__isnull=True)
         except Empresa.DoesNotExist:
             raise NotFound("Empresa matriz não encontrada para este usuário.")
+
+
+class EmpresasGeraisAPIView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmpresaAllModelSerializer
+    pagination_class = None
+    queryset = Empresa.objects.filter(status=1).order_by('created_at')
 
 
 @extend_schema_view(
@@ -586,6 +595,13 @@ class FuncionarioRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
         )
 
 
+class FuncionarioGeraisAPIView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FuncionarioAllModelSerializer
+    pagination_class = None
+    queryset = Funcionario.objects.filter(status=1).order_by('criado_em')
+
+
 @extend_schema_view(
     get=extend_schema(
         tags=["Empresa"],
@@ -770,3 +786,206 @@ class FuncionarioRotasRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestro
     queryset = RotasPermitidas.objects.all()
     serializer_class = FuncionarioRotaModelSerializer
     permission_classes = [IsAuthenticated, UsuarioIndependenteOuAdmin]
+
+
+'''
+    SOMENTE PARA ADMINISTRADORES
+'''
+
+
+@extend_schema(exclude=True)
+class EmpresaAdminDetailAPIView(APIView):
+    """
+    GET  → Lista todos os dados (empresa, usuário, funcionário, segmentos, sistema)
+    PUT  → Atualiza tudo (empresa, usuário, funcionário, segmentos)
+    PATCH → Atualização parcial
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = self.get_user(pk)
+        empresa = self.get_empresa(user.id)
+
+        serializer = EmpresaAdminDetailSerializer(
+            instance=empresa,
+            context={'request': request}
+        )
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        user = self.get_user(pk)
+        empresa = self.get_empresa(user.id)
+
+        serializer = CriacaoEmpresaFuncionarioSerializer(
+            instance=empresa,
+            data=request.data,
+            context={'request': request},
+            partial=False
+        )
+
+        if serializer.is_valid():
+            return Response(serializer.save())
+
+        return Response(serializer.errors, status=400)
+
+    def patch(self, request, pk):
+        user = self.get_user(pk)
+        empresa = self.get_empresa(user.id)
+
+        serializer = CriacaoEmpresaFuncionarioSerializer(
+            instance=empresa,
+            data=request.data,
+            context={'request': request},
+            partial=True
+        )
+
+        if serializer.is_valid():
+            return Response(serializer.save())
+
+        return Response(serializer.errors, status=400)
+
+    def get_user(self, pk):
+        try:
+            return User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            raise NotFound('Usuário não encontrado')
+
+    def get_empresa(self, user_id):
+        empresa = Empresa.objects.select_related(
+            'categoria',
+            'sistema',
+            'matriz_filial'
+        ).filter(usuario__id=user_id).first()
+
+        if not empresa:
+            raise NotFound('Empresa não encontrada para este usuário')
+
+        return empresa
+
+
+@extend_schema(exclude=True)
+class CriarEmpresaAdminAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        # Converte para dict para facilitar
+        data_dict = dict(request.data.lists())
+
+        # ======================================
+        # PROCESSAMENTO DOS DADOS
+        # ======================================
+        processed_data = {}
+
+        for key, values in data_dict.items():
+            # SEGMENTOS - FORMATOS ESPERADOS:
+            # 1. segmentos[] = [1, 2, 3] (Postman/Frontend padrão)
+            # 2. segmentos = "1,2,3" (string com vírgulas)
+            # 3. segmentos = "[1,2,3]" (JSON string)
+
+            if 'segment' in key.lower():
+                segmentos_list = []
+
+                for value in values:
+                    if value is not None and str(value).strip():
+                        value_str = str(value).strip()
+
+                        # Tenta como JSON
+                        if (value_str.startswith('[') and value_str.endswith(']')):
+                            try:
+                                import json
+                                json_list = json.loads(value_str)
+                                if isinstance(json_list, list):
+                                    for item in json_list:
+                                        try:
+                                            segmentos_list.append(int(item))
+                                        except (ValueError, TypeError):
+                                            print(f"Item inválido no JSON: {item}")
+                            except json.JSONDecodeError:
+                                print(f"JSON inválido: {value_str}")
+
+                        # Tenta como string com vírgulas
+                        elif ',' in value_str:
+                            parts = value_str.split(',')
+                            for part in parts:
+                                part = part.strip()
+                                if part:
+                                    try:
+                                        segmentos_list.append(int(part))
+                                    except ValueError:
+                                        print(f"Parte inválida: {part}")
+
+                        # Tenta como número simples
+                        else:
+                            try:
+                                segmentos_list.append(int(value_str))
+                            except ValueError:
+                                print(f"Valor não numérico: {value_str}")
+
+                # Remove duplicatas e ordena
+                if segmentos_list:
+                    segmentos_list = sorted(list(set(segmentos_list)))
+
+                processed_data['segmentos'] = segmentos_list
+
+            # Campos do tipo empresa[campo]
+            elif key.startswith('empresa[') and key.endswith(']'):
+                campo = key[8:-1]  # Extrai o nome do campo
+                processed_data[campo] = values[0] if len(values) == 1 else values
+
+            # Campos simples (único valor)
+            elif len(values) == 1:
+                processed_data[key] = values[0] if values[0] not in ['', None] else None
+
+            # Campos com múltiplos valores
+            else:
+                processed_data[key] = values
+
+        # Garante que segmentos existe
+        if 'segmentos' not in processed_data:
+            processed_data['segmentos'] = []
+
+        # ======================================
+        # CONVERSÃO DE TIPOS
+        # ======================================
+        # Booleanos
+        bool_fields = ['is_admin', 'is_branch', 'is_staff', 'is_active', 'criar_banco']
+        for field in bool_fields:
+            if field in processed_data:
+                old = processed_data[field]
+                if isinstance(old, str):
+                    processed_data[field] = old.lower() in ['true', '1', 'yes', 't', 'y']
+
+        # Inteiros
+        int_fields = ['status', 'categoria', 'sistema', 'matriz_filial',
+                      'empresa_id', 'max_funcionarios_registros']
+        for field in int_fields:
+            if field in processed_data and processed_data[field] not in [None, '']:
+                try:
+                    old = processed_data[field]
+                    processed_data[field] = int(processed_data[field])
+                except (ValueError, TypeError) as e:
+                    print(f"Erro ao converter {field}: {e}")
+                    processed_data[field] = None
+
+        serializer = CriacaoEmpresaFuncionarioSerializer(
+            data=processed_data,
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            try:
+                resultado = serializer.save()
+                return Response(resultado, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return Response(
+                    {
+                        'error': 'Erro interno no servidor.',
+                        'detail': str(e),
+                        'traceback': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -52,6 +52,8 @@ if DEBUG:
         "http://127.0.0.1:3000",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais em desenvolvimento
 
@@ -60,6 +62,8 @@ if DEBUG:
         "http://127.0.0.1:3000",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ]
 else:
     # Em produção, permitir apenas origens específicas
@@ -137,6 +141,10 @@ INSTALLED_APPS = [
     'apexcharts',
     'sistema',
     'agendaGrupo.agenda',
+
+    'cloud.circularizacao',
+    'cloud.segmento',
+    'cloud.cliente',
 
     # App para controlar migracoes de banco empresas
     'db_allnube_empresa',
@@ -319,3 +327,13 @@ SPECTACULAR_SETTINGS = {
         'app.schema_hooks.remove_specific_paths',
     ],
 }
+
+# Configurações S3
+AWS_USE_S3_UPLOAD = os.getenv('AWS_USE_S3_UPLOAD', 'False').lower() == 'true'
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', '')
+AWS_DEFAULT_REGION = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
+AWS_BUCKET = os.getenv('AWS_BUCKET', '')
+
+# Storage padrão
+DEFAULT_FILE_STORAGE = 'app.storage_backends.conditional_storage'

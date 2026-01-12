@@ -9,6 +9,7 @@ class SegmentoListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     queryset = Segmento.objects.all()
     serializer_class = SegmentoModelSerializer
+    pagination_class = None
 
 
 class SegmengoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):

@@ -1,3 +1,5 @@
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -11,10 +13,12 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
+
+from empresa.models import Empresa, Funcionario
 
 
 @extend_schema_view(
@@ -265,11 +269,11 @@ class UserProfileCreateView(APIView):
 
         # Verifica se o e-mail já está em uso
         if User.objects.filter(email=data['email']).exists():
-            return Response({"error": "Este e-mail já está em uso."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"email": "Este e-mail já está em uso."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Verifica se o username já está em uso
         if User.objects.filter(username=data['username']).exists():
-            return Response({"error": "Este nome de usuário já está em uso."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"username": "Este nome de usuário já está em uso."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Criação do usuário
         user = User.objects.create_user(
@@ -486,12 +490,30 @@ class UserProfileView(APIView):
 
     def get(self, request):
         user = request.user
+
+        empresas = Empresa.objects.filter(usuario=user).select_related('sistema')
+
+        empresas_data = []
+        for empresa in empresas:
+            empresas_data.append({
+                'id': empresa.id,
+                'razao_social': empresa.razao_social,
+                'documento': empresa.documento,
+                'sistema': {
+                    'id': empresa.sistema.id if empresa.sistema else None,
+                    'nome': empresa.sistema.nome if empresa.sistema else None,
+                }
+            })
+
         return Response({
             'id': user.id,
             'username': user.username,
+            'admin': user.is_staff,
+            'status': user.is_active,
             'email': user.email,
             'first_name': user.first_name,
             'last_name': user.last_name,
+            'empresas': empresas_data,
         })
 
 
@@ -628,3 +650,98 @@ class UserUpdateProfile(APIView):
             'is_active': user.is_active,
             'is_staff': user.is_staff,
         }, status=status.HTTP_200_OK)
+
+
+class FuncionarioPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class FuncionarioPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class UsersList(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = FuncionarioPagination
+
+    def get_queryset(self):
+        return User.objects.all().order_by('id')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            user_ids = [user.id for user in page]
+
+            # Bulk fetch all funcionarios for these users
+            funcionarios = Funcionario.objects.filter(
+                user_id__in=user_ids
+            ).select_related('empresa')
+
+            # Create a mapping of user_id -> list of funcionarios
+            funcionarios_dict = {}
+            for funcionario in funcionarios:
+                if funcionario.user_id not in funcionarios_dict:
+                    funcionarios_dict[funcionario.user_id] = []
+                funcionarios_dict[funcionario.user_id].append(funcionario)
+
+            serializer_data = []
+
+            for user in page:
+                empresas_data = []
+                user_funcionarios = funcionarios_dict.get(user.id, [])
+
+                for funcionario in user_funcionarios:
+                    empresa = funcionario.empresa
+
+                    # Check if empresa exists and has sistema_id=3
+                    if empresa and empresa.sistema_id == 1:
+                        empresas_data.append({
+                            'role': funcionario.role,
+                            'empresa_id': empresa.id,
+                            'razao_social': empresa.razao_social,
+                            'documento': empresa.documento,
+                            'is_branch': True if empresa.matriz_filial_id is not None else False,
+                        })
+                    elif empresa:
+                        # Empresa exists but sistema_id != 3
+                        empresas_data.append({
+                            'role': funcionario.role,
+                            'empresa_id': empresa.id,
+                            'sistema_id': empresa.sistema_id,
+                            'razao_social': empresa.razao_social,
+                            'documento': empresa.documento,
+                            'is_branch': True if empresa.matriz_filial_id is not None else False,
+                            'note': f"Sistema ID é {empresa.sistema_id}, não 1"
+                        })
+                    else:
+                        # No empresa associated
+                        empresas_data.append({
+                            'role': funcionario.role,
+                            'empresa_id': funcionario.empresa_id,
+                            'razao_social': None,
+                            'documento': None,
+                            'is_branch': True if empresa.matriz_filial_id is not None else False,
+                            'note': 'Empresa não encontrada'
+                        })
+
+                data = {
+                    'id': user.id,
+                    'name': f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
+                    'email': user.email,
+                    'admin': user.is_staff,
+                    'status': user.is_active,
+                    'created_at': user.date_joined,
+                    'empresas': empresas_data,
+                }
+
+                serializer_data.append(data)
+
+            return self.get_paginated_response(serializer_data)
+
+        return Response([])

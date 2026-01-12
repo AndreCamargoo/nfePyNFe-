@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import (
 from .views import (
     CustomTokenObtainPairView, CustomTokenRefreshView, CustomTokenVerifyView,
     UserProfileView, UserProfileCreateView, UserUpdateProfile,
-    PasswordResetRequestAPIView, PasswordResetConfirmAPIView
+    PasswordResetRequestAPIView, PasswordResetConfirmAPIView, UsersList
 )
 
 urlpatterns = [
@@ -21,4 +21,6 @@ urlpatterns = [
 
     path('authentication/token/me/', UserProfileView.as_view(), name='user_profile'),
     path('accounts/users/<int:pk>/', UserUpdateProfile.as_view(), name='user_profile_update'),
+
+    path('authentication/users/', UsersList.as_view(), name='list-users-view'),
 ]
