@@ -85,6 +85,7 @@ class FuncionarioPastaSerializer(serializers.ModelSerializer):
 class PastaModelSerializer(serializers.ModelSerializer):
     sub_pastas = RecursiveField(many=True, source='subpastas', read_only=True)
     funcionarios = serializers.SerializerMethodField()
+    empresas = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
     filesCount = serializers.SerializerMethodField()
 
@@ -101,6 +102,7 @@ class PastaModelSerializer(serializers.ModelSerializer):
             'deletado_em',
             'segmento',
             'funcionarios',
+            'empresas',
             'size',  # Tamanho INDIVIDUAL
             'filesCount'  # Arquivos INDIVIDUAIS
         ]
@@ -121,6 +123,13 @@ class PastaModelSerializer(serializers.ModelSerializer):
         # Busca todos os administradores desta pasta
         administradores = AdministradorPasta.objects.filter(pasta=obj).distinct('funcionario_id')
         return FuncionarioPastaSerializer(administradores, many=True).data
+
+    def get_empresas(self, obj):
+        # Busca todas as empresas que são administradoras desta pasta
+        administradores = AdministradorPasta.objects.filter(pasta=obj)
+        empresas_ids = administradores.values_list('empresa_id', flat=True).distinct()
+        empresas = Empresa.objects.filter(id__in=empresas_ids)
+        return EmpresaModelSerializer(empresas, many=True).data
 
 
 class ArquivoModelSerializer(serializers.ModelSerializer):
@@ -417,6 +426,23 @@ class AdministradorPastaModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdministradorPasta
         fields = '__all__'
+
+
+class AdministradorPastaSerializer(serializers.ModelSerializer):
+    empresa = EmpresaModelSerializer(read_only=True)
+    funcionario = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AdministradorPasta
+        fields = ['id', 'empresa', 'funcionario', 'data_designacao']
+
+    def get_funcionario(self, obj):
+        return {
+            'id': obj.funcionario.id,
+            'nome': obj.funcionario.get_full_name() or obj.funcionario.username,
+            'email': obj.funcionario.email,
+            'username': obj.funcionario.username
+        }
 
 
 class AdministradorPastaBulkSerializer(serializers.Serializer):

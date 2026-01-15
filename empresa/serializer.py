@@ -192,7 +192,7 @@ class EmpresaAllModelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Empresa
-        fields = ['id', 'razao_social', 'documento']
+        fields = ['id', 'razao_social', 'documento', 'status']
 
 
 class CategoriaEmpresaModelSerializer(serializers.ModelSerializer):
@@ -420,6 +420,7 @@ class UserBasicSerializer(serializers.ModelSerializer):
 
 class FuncionarioAllModelSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
+    empresa = serializers.SerializerMethodField()
 
     class Meta:
         model = Funcionario
@@ -429,8 +430,14 @@ class FuncionarioAllModelSerializer(serializers.ModelSerializer):
             'status',
             'criado_em',
             'atualizado_em',
-            'user'
+            'user',
+            'empresa'
         ]
+
+    def get_empresa(self, obj):
+        if hasattr(obj, 'empresa') and obj.empresa:
+            return EmpresaListSerializer(obj.empresa).data
+        return None
 
 
 class FuncionarioRotaModelSerializer(serializers.ModelSerializer):

@@ -6,7 +6,8 @@ urlpatterns = [
     path('cloud/pastas/', views.PastaListCreateAPIView.as_view(), name='pastas-create-list'),
     path('cloud/pasta/<int:pk>/', views.PastaRetrieveUpdateDestroyAPIView.as_view(), name='pasta-detail'),
 
-    path('cloud/subpastas/', views.PastaListAPIView.as_view(), name='pastas-list'),
+    path('cloud/subpastas/', views.SubPastaListAPIView.as_view(), name='subPastas-list'),
+    path('cloud/subpastas/<int:pk>/', views.SubPastaDirectListAPIView.as_view(), name='subPasta-detail'),
 
     path('cloud/arquivos/', views.ArquivoListCreateAPIView.as_view(), name='arquivo-create-list'),
     path('cloud/arquivo/<int:pk>/', views.ArquivoRetrieveUpdateDestroyAPIView.as_view(), name='arquivo-detail'),
@@ -26,7 +27,10 @@ urlpatterns = [
     path('cloud/permissao-pasta-clientes/', views.AdministradorPastaListCreateAPIView.as_view(), name='cliente-vincular-create-list'),
     path('cloud/permissao-pasta-cliente/<int:pk>/', views.AdministradorPastaRetrieveUpdateDestroyAPIView.as_view(), name='cliente-vincular-detail'),
     path('cloud/permissao-pasta-cliente/funcionario/<int:funcionario_id>/', views.PastaListByFuncionarioAPIView.as_view(), name='cliente-list-by-empresa'),
+
+    path('cloud/permissao-pasta-clientes/<int:pasta_id>/', views.AdministradorPastaListAPIView.as_view(), name='cliente-permissao-list'),
     path('cloud/permissao-pasta-clientes/bulk/', views.AdministradorPastaBulkCreateAPIView.as_view(), name='cliente-vincular-bulk'),
+    path('cloud/permissao-pasta-clientes/<int:pasta_id>/update/', views.AdministradorPastaBulkUpdateAPIView.as_view(), name='cliente-permissao-update'),
 
     path('cloud/pastas-fixadas/', views.PastaFixadaListCreateAPIView.as_view(), name='pastas-fixadas'),
     path('cloud/pastas-fixadas/<int:pk>/', views.PastaFixadaDestroyAPIView.as_view(), name='pasta-fixada-remove'),

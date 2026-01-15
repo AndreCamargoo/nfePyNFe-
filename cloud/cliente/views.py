@@ -9,29 +9,30 @@ from django.db.models import Sum, Count, Q
 from django.core.files.storage import FileSystemStorage
 
 from django.conf import settings
-from django.http import HttpResponse, FileResponse, Http404
-from tempfile import NamedTemporaryFile
+from django.http import FileResponse
 from django.utils.text import slugify
 
 from wsgiref.util import FileWrapper
 from django.http import StreamingHttpResponse
 
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 
+from django.db import transaction
+
 from .models import (
     Pasta, Arquivo, Cliente, AdministradorPasta,
-    PastaFixada, PastaRecente, TipoDrive, StatusChoices
+    PastaFixada, PastaRecente, TipoDrive, StatusChoices, User
 )
 from .serializer import (
     PastaModelSerializer, ArquivoModelSerializer, ClienteModelSerializer,
     AdministradorPastaModelSerializer, AdministradorFuncionarioPastaModelSerializer,
     PastaFixadaSerializer, PastaFixadaCreateSerializer, PastaRecenteSerializer,
-    AdministradorPastaBulkSerializer
+    AdministradorPastaBulkSerializer, AdministradorPastaSerializer
 )
 
 from app.utils import utils
@@ -40,8 +41,6 @@ from app.permissions import PodeAcessarRotasFuncionario
 
 from urllib.parse import urljoin
 from django.conf import settings
-
-from app.utils import utils
 
 
 class PastaListCreateAPIView(generics.ListCreateAPIView):
@@ -140,7 +139,7 @@ class PastaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
         instance.delete(user=self.request.user)
 
 
-class PastaListAPIView(generics.ListAPIView):
+class SubPastaListAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, PodeAcessarRotasFuncionario]
     serializer_class = PastaModelSerializer
     pagination_class = utils.CustomPageSizePagination
@@ -225,6 +224,91 @@ class PastaListAPIView(generics.ListAPIView):
         except Exception as e:
             print(f"Erro ao buscar pastas: {e}")
             return Pasta.objects.none()
+
+
+class SubPastaDirectListAPIView(generics.ListAPIView):
+    """
+    Retorna APENAS as subpastas DIRETAS (filhas imediatas) de uma pasta específica
+    Onde pasta_pai = pk da URL
+    """
+    permission_classes = [IsAuthenticated, PodeAcessarRotasFuncionario]
+    serializer_class = PastaModelSerializer
+    pagination_class = utils.CustomPageSizePagination
+
+    def paginate_queryset(self, queryset):
+        """Aplica a mesma lógica de paginação da view original"""
+        paginate = self.request.query_params.get("paginate", "false")
+
+        if paginate.lower() in ["true", "1", "yes"]:
+            return super().paginate_queryset(queryset)
+
+        return None  # padrão SEM paginação
+
+    def get_queryset(self):
+        """
+        Retorna APENAS as subpastas diretas onde pasta_pai = pk da URL
+        """
+        pasta_pai_id = self.kwargs['pk']
+        user = self.request.user
+        empresa_id = self.request.query_params.get('empresa')
+
+        # Query inicial: subpastas onde pasta_pai = pk
+        queryset = Pasta.objects.filter(
+            pasta_pai_id=pasta_pai_id,
+            status='1'  # Apenas ativas
+        )
+
+        # Filtra por permissões do usuário
+        queryset = self._filtrar_por_permissao(queryset, user, empresa_id)
+
+        # Adiciona anotações para cada subpasta
+        for pasta in queryset:
+            pasta.individual_size = pasta.get_individual_size()
+            pasta.individual_files_count = pasta.get_immediate_files_count()
+
+        return queryset
+
+    def _filtrar_por_permissao(self, queryset, user, empresa_id):
+        """
+        Filtra as subpastas baseado nas permissões do usuário
+        """
+        # Superusuário - acessa todas
+        if user.is_superuser:
+            return queryset
+
+        # Usuário comum - filtra pastas que tem acesso
+        if empresa_id:
+            # Pastas que o usuário administra nesta empresa
+            pastas_administradas = AdministradorPasta.objects.filter(
+                funcionario=user,
+                empresa_id=empresa_id
+            ).values_list('pasta_id', flat=True)
+
+            # Pastas da empresa do usuário (se for a mesma)
+            if hasattr(user, 'empresa') and str(user.empresa.id) == empresa_id:
+                pastas_empresa = Pasta.objects.filter(
+                    clientes_da_pasta__empresa_id=empresa_id
+                ).values_list('id', flat=True)
+                pasta_ids = list(pastas_administradas) + list(pastas_empresa)
+            else:
+                pasta_ids = list(pastas_administradas)
+        else:
+            # Pastas que o usuário administra (sem filtro de empresa)
+            pastas_administradas = AdministradorPasta.objects.filter(
+                funcionario=user
+            ).values_list('pasta_id', flat=True)
+
+            # Pastas da empresa do usuário
+            if hasattr(user, 'empresa'):
+                pastas_empresa = Pasta.objects.filter(
+                    clientes_da_pasta__empresa=user.empresa
+                ).values_list('id', flat=True)
+                pasta_ids = list(pastas_administradas) + list(pastas_empresa)
+            else:
+                pasta_ids = list(pastas_administradas)
+
+        # Filtra o queryset pelas pastas que o usuário tem acesso
+        return queryset.filter(id__in=pasta_ids)
 
 
 class ArquivoListCreateAPIView(generics.ListCreateAPIView):
@@ -773,6 +857,43 @@ class AdministradorPastaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDest
     queryset = AdministradorPasta.objects.all()
 
 
+class AdministradorPastaListAPIView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AdministradorPastaSerializer
+
+    def get_queryset(self):
+        pasta_id = self.kwargs['pasta_id']
+        return AdministradorPasta.objects.filter(pasta_id=pasta_id).select_related('empresa', 'funcionario')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        # Agrupa por empresa para facilitar o frontend
+        empresas = {}
+        for item in serializer.data:
+            empresa_id = item['empresa']['id']
+            if empresa_id not in empresas:
+                empresas[empresa_id] = {
+                    'empresa': item['empresa'],
+                    'funcionarios': []
+                }
+            empresas[empresa_id]['funcionarios'].append(item['funcionario'])
+
+        # Também pode retornar listas separadas
+        empresas_ids = list(set(item['empresa']['id'] for item in serializer.data))
+        funcionarios_ids = list(set(item['funcionario']['id'] for item in serializer.data))
+
+        return Response({
+            "permissoes": serializer.data,
+            "agrupado": list(empresas.values()),
+            "listas": {
+                "empresas": empresas_ids,
+                "funcionarios": funcionarios_ids
+            }
+        })
+
+
 class AdministradorPastaBulkCreateAPIView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = AdministradorPastaBulkSerializer
@@ -792,6 +913,128 @@ class AdministradorPastaBulkCreateAPIView(generics.CreateAPIView):
                 } for r in registros
             ]
         }, status=201)
+
+
+class AdministradorPastaBulkUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def put(self, request, pasta_id, *args, **kwargs):
+        """
+        Atualiza as permissões de uma pasta
+        Payload:
+        {
+            "empresas": [1, 2, 3],  # IDs das empresas
+            "funcionarios": [5, 6, 7]  # IDs dos funcionários
+        }
+        """
+        try:
+            pasta = Pasta.objects.get(id=pasta_id)
+        except Pasta.DoesNotExist:
+            return Response(
+                {"error": f"Pasta com ID {pasta_id} não encontrada."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Validação básica
+        empresas_ids = request.data.get('empresas', [])
+        funcionarios_ids = request.data.get('funcionarios', [])
+
+        if not isinstance(empresas_ids, list) or not isinstance(funcionarios_ids, list):
+            return Response(
+                {"error": "Empresas e funcionários devem ser listas."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verifica se as empresas existem
+        empresas_count = Empresa.objects.filter(id__in=empresas_ids).count()
+        if empresas_count != len(empresas_ids):
+            return Response(
+                {"error": "Uma ou mais empresas não existem."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verifica se os funcionários existem
+        funcionarios_count = User.objects.filter(id__in=funcionarios_ids).count()
+        if funcionarios_count != len(funcionarios_ids):
+            return Response(
+                {"error": "Um ou mais funcionários não existem."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Obtém as permissões atuais
+        permissoes_atuais = AdministradorPasta.objects.filter(pasta=pasta)
+
+        # Cria um conjunto das combinações atuais para comparação
+        combinacoes_atuais = set()
+        for permissao in permissoes_atuais:
+            combinacoes_atuais.add((permissao.empresa_id, permissao.funcionario_id))
+
+        # Cria um conjunto das novas combinações
+        novas_combinacoes = set()
+        for empresa_id in empresas_ids:
+            for funcionario_id in funcionarios_ids:
+                novas_combinacoes.add((empresa_id, funcionario_id))
+
+        # Encontra o que precisa ser removido
+        para_remover = combinacoes_atuais - novas_combinacoes
+        # Encontra o que precisa ser adicionado
+        para_adicionar = novas_combinacoes - combinacoes_atuais
+
+        # Remove permissões que não estão mais na lista
+        if para_remover:
+            for empresa_id, funcionario_id in para_remover:
+                AdministradorPasta.objects.filter(
+                    pasta=pasta,
+                    empresa_id=empresa_id,
+                    funcionario_id=funcionario_id
+                ).delete()
+
+        # Adiciona novas permissões
+        adicionados = []
+        if para_adicionar:
+            for empresa_id, funcionario_id in para_adicionar:
+                try:
+                    empresa = Empresa.objects.get(id=empresa_id)
+                    funcionario = User.objects.get(id=funcionario_id)
+
+                    nova_permissao = AdministradorPasta.objects.create(
+                        pasta=pasta,
+                        empresa=empresa,
+                        funcionario=funcionario
+                    )
+                    adicionados.append(nova_permissao)
+                except Exception as e:
+                    # Rollback da transação em caso de erro
+                    transaction.set_rollback(True)
+                    return Response(
+                        {"error": f"Erro ao criar permissão: {str(e)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+        # Monta a resposta
+        return Response({
+            "message": "Permissões atualizadas com sucesso.",
+            "pasta_id": pasta_id,
+            "pasta_nome": pasta.nome,
+            "stats": {
+                "empresas_enviadas": len(empresas_ids),
+                "funcionarios_enviados": len(funcionarios_ids),
+                "combinacoes_totais": len(novas_combinacoes),
+                "removidos": len(para_remover),
+                "adicionados": len(para_adicionar),
+                "mantidos": len(combinacoes_atuais.intersection(novas_combinacoes))
+            },
+            "adicionados": [
+                {
+                    "id": item.id,
+                    "empresa": item.empresa_id,
+                    "funcionario": item.funcionario_id,
+                    "empresa_nome": item.empresa.razao_social,
+                    "funcionario_nome": item.funcionario.get_full_name() or item.funcionario.username
+                } for item in adicionados
+            ]
+        }, status=status.HTTP_200_OK)
 
 
 class PastaListByFuncionarioAPIView(generics.ListAPIView):

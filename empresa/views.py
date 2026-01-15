@@ -9,6 +9,8 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
 
+from app.utils import utils
+
 from empresa.models import (
     Empresa, CategoriaEmpresa, ConexaoBanco,
     Funcionario, RotasPermitidas
@@ -220,8 +222,17 @@ class EmpresaPorUsuarioAPIView(generics.RetrieveAPIView):
 class EmpresasGeraisAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = EmpresaAllModelSerializer
-    pagination_class = None
     queryset = Empresa.objects.filter(status=1).order_by('created_at')
+    pagination_class = utils.CustomPageSizePagination
+
+    def paginate_queryset(self, queryset):
+        """Aplica a mesma lógica de paginação da view original"""
+        paginate = self.request.query_params.get("paginate", "false")
+
+        if paginate.lower() in ["true", "1", "yes"]:
+            return super().paginate_queryset(queryset)
+
+        return None  # padrão SEM paginação
 
 
 @extend_schema_view(
