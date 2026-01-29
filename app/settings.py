@@ -74,8 +74,8 @@ else:
         "https://api.allnube.com.br",
         "https://agendagrupo.azevedo.cnt.br",
         "https://www.agendagrupo.azevedo.cnt.br",
-        "https://leads.azv.tec.br/",
-        "https://www.leads.azv.tec.br/"
+        "https://leads.azv.tec.br",
+        "https://www.leads.azv.tec.br"
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
@@ -158,8 +158,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
