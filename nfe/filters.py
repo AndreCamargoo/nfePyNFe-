@@ -4,10 +4,6 @@ from django.db.models import Q
 from .models import NotaFiscal, Produto, Emitente
 
 
-from django.db.models import Q
-import datetime
-
-
 class NotaFiscalFilter(django_filters.FilterSet):
     ide_cUF = django_filters.CharFilter(field_name='ide__cUF', lookup_expr='icontains')
     emitente_nome = django_filters.CharFilter(field_name='emitente__xNome', lookup_expr='icontains')
@@ -24,9 +20,7 @@ class NotaFiscalFilter(django_filters.FilterSet):
 
     def filter_by_q(self, queryset, name, value):
         filters = (
-            Q(emitente__CNPJ__icontains=value) |
-            Q(emitente__xNome__icontains=value) |
-            Q(chave__icontains=value)
+            Q(emitente__CNPJ__icontains=value) | Q(emitente__xNome__icontains=value) | Q(chave__icontains=value)
         )
 
         # Tenta interpretar como data (vários formatos)

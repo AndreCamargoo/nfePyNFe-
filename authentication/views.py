@@ -13,7 +13,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
@@ -668,80 +668,83 @@ class UsersList(ListAPIView):
     permission_classes = [IsAuthenticated]
     pagination_class = FuncionarioPagination
 
+    def initial(self, request, *args, **kwargs):
+        paginate = request.query_params.get("disablePaginate", "false").lower()
+
+        if paginate in ["true", "1", "yes"]:
+            self.pagination_class = None  # desativa paginação
+
+        super().initial(request, *args, **kwargs)
+
     def get_queryset(self):
-        return User.objects.all().order_by('id')
+        return User.objects.all().order_by("id")
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
 
+        # 🔹 Se NÃO estiver paginando, use o queryset inteiro
+        users = page if page is not None else queryset
+
+        user_ids = [user.id for user in users]
+
+        funcionarios = Funcionario.objects.filter(
+            user_id__in=user_ids
+        ).select_related('empresa')
+
+        funcionarios_dict = {}
+        for funcionario in funcionarios:
+            funcionarios_dict.setdefault(funcionario.user_id, []).append(funcionario)
+
+        serializer_data = []
+
+        for user in users:
+            empresas_data = []
+            user_funcionarios = funcionarios_dict.get(user.id, [])
+
+            for funcionario in user_funcionarios:
+                empresa = funcionario.empresa
+
+                if empresa and empresa.sistema_id == 1:
+                    empresas_data.append({
+                        'role': funcionario.role,
+                        'empresa_id': empresa.id,
+                        'razao_social': empresa.razao_social,
+                        'documento': empresa.documento,
+                        'is_branch': empresa.matriz_filial_id is not None,
+                    })
+                elif empresa:
+                    empresas_data.append({
+                        'role': funcionario.role,
+                        'empresa_id': empresa.id,
+                        'sistema_id': empresa.sistema_id,
+                        'razao_social': empresa.razao_social,
+                        'documento': empresa.documento,
+                        'is_branch': empresa.matriz_filial_id is not None,
+                        'note': f"Sistema ID é {empresa.sistema_id}, não 1"
+                    })
+                else:
+                    empresas_data.append({
+                        'role': funcionario.role,
+                        'empresa_id': funcionario.empresa_id,
+                        'razao_social': None,
+                        'documento': None,
+                        'is_branch': False,
+                        'note': 'Empresa não encontrada'
+                    })
+
+            serializer_data.append({
+                'id': user.id,
+                'name': f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
+                'email': user.email,
+                'admin': user.is_staff,
+                'status': user.is_active,
+                'created_at': user.date_joined,
+                'empresas': empresas_data,
+            })
+
+        # 🔹 Retorno correto
         if page is not None:
-            user_ids = [user.id for user in page]
-
-            # Bulk fetch all funcionarios for these users
-            funcionarios = Funcionario.objects.filter(
-                user_id__in=user_ids
-            ).select_related('empresa')
-
-            # Create a mapping of user_id -> list of funcionarios
-            funcionarios_dict = {}
-            for funcionario in funcionarios:
-                if funcionario.user_id not in funcionarios_dict:
-                    funcionarios_dict[funcionario.user_id] = []
-                funcionarios_dict[funcionario.user_id].append(funcionario)
-
-            serializer_data = []
-
-            for user in page:
-                empresas_data = []
-                user_funcionarios = funcionarios_dict.get(user.id, [])
-
-                for funcionario in user_funcionarios:
-                    empresa = funcionario.empresa
-
-                    # Check if empresa exists and has sistema_id=3
-                    if empresa and empresa.sistema_id == 1:
-                        empresas_data.append({
-                            'role': funcionario.role,
-                            'empresa_id': empresa.id,
-                            'razao_social': empresa.razao_social,
-                            'documento': empresa.documento,
-                            'is_branch': True if empresa.matriz_filial_id is not None else False,
-                        })
-                    elif empresa:
-                        # Empresa exists but sistema_id != 3
-                        empresas_data.append({
-                            'role': funcionario.role,
-                            'empresa_id': empresa.id,
-                            'sistema_id': empresa.sistema_id,
-                            'razao_social': empresa.razao_social,
-                            'documento': empresa.documento,
-                            'is_branch': True if empresa.matriz_filial_id is not None else False,
-                            'note': f"Sistema ID é {empresa.sistema_id}, não 1"
-                        })
-                    else:
-                        # No empresa associated
-                        empresas_data.append({
-                            'role': funcionario.role,
-                            'empresa_id': funcionario.empresa_id,
-                            'razao_social': None,
-                            'documento': None,
-                            'is_branch': True if empresa.matriz_filial_id is not None else False,
-                            'note': 'Empresa não encontrada'
-                        })
-
-                data = {
-                    'id': user.id,
-                    'name': f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
-                    'email': user.email,
-                    'admin': user.is_staff,
-                    'status': user.is_active,
-                    'created_at': user.date_joined,
-                    'empresas': empresas_data,
-                }
-
-                serializer_data.append(data)
-
             return self.get_paginated_response(serializer_data)
 
-        return Response([])
+        return Response(serializer_data)

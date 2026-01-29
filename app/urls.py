@@ -23,12 +23,15 @@ urlpatterns = [
     path('api/v1/', include('apexcharts.urls')),
 
     # Agenda rotas e modulos
-    path('api/v1/', include('agendaGrupo.agenda.urls')),
+    # path('api/v1/', include('agendaGrupo.agenda.urls')),
 
     # Cloud rotas e modulos
     path('api/v1/', include('cloud.circularizacao.urls')),
     path('api/v1/', include('cloud.cliente.urls')),
     path('api/v1/', include('cloud.segmento.urls')),
+
+    # Leads azevedo
+    path('api/v1/', include('leads_api.urls')),
 
     # YOUR PATTERNS
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

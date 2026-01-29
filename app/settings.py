@@ -17,6 +17,7 @@ API_USERNAME = os.getenv('API_USERNAME')
 API_PASSWORD = os.getenv('API_PASSWORD')
 DOWNLOAD_AGENDA = os.getenv('DOWNLOAD_AGENDA')
 API_URL = os.getenv('API_URL')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -73,6 +74,8 @@ else:
         "https://api.allnube.com.br",
         "https://agendagrupo.azevedo.cnt.br",
         "https://www.agendagrupo.azevedo.cnt.br",
+        "https://leads.azv.tec.br/",
+        "https://www.leads.azv.tec.br/"
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
@@ -82,6 +85,8 @@ else:
         "https://api.allnube.com.br",
         'https://agendagrupo.azevedo.cnt.br',
         'https://www.agendagrupo.azevedo.cnt.br',
+        "https://leads.azv.tec.br/",
+        "https://www.leads.azv.tec.br/"
     ]
 
 # Cabeçalhos permitidos para CORS
@@ -140,7 +145,6 @@ INSTALLED_APPS = [
     'empresa',
     'apexcharts',
     'sistema',
-    'agendaGrupo.agenda',
 
     'cloud.circularizacao',
     'cloud.segmento',
@@ -148,6 +152,9 @@ INSTALLED_APPS = [
 
     # App para controlar migracoes de banco empresas
     'db_allnube_empresa',
+
+    # Leads
+    'leads_api',
 ]
 
 MIDDLEWARE = [

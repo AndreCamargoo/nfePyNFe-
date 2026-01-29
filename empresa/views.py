@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
+from django.http import Http404
 
 from app.utils import utils
 
@@ -24,7 +25,7 @@ from empresa.serializer import (
 
 from app.permissions import GlobalDefaultPermission, UsuarioIndependenteOuAdmin
 
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample
 
 
 class EmpresaBaseView:
@@ -609,8 +610,41 @@ class FuncionarioRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
 class FuncionarioGeraisAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = FuncionarioAllModelSerializer
-    pagination_class = None
     queryset = Funcionario.objects.filter(status=1).order_by('criado_em')
+    pagination_class = utils.CustomPageSizePagination
+
+    def paginate_queryset(self, queryset):
+        paginate = self.request.query_params.get("paginate", "false")
+
+        if paginate.lower() in ["true", "1", "yes"]:
+            return super().paginate_queryset(queryset)
+
+        return None  # padrão SEM paginação
+
+
+# views.py
+# views.py
+class FuncionarioAdminDetail(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    serializer_class = FuncionarioAllModelSerializer
+
+    def get_object(self):
+        pk = self.kwargs.get('pk')
+
+        try:
+            # Get the funcionario by primary key and ensure it's active
+            funcionario = Funcionario.objects.filter(
+                pk=pk,
+                status='1'
+            ).select_related('empresa', 'user').first()
+
+            if not funcionario:
+                raise Http404("Funcionário não encontrado ou inativo")
+
+            return funcionario
+
+        except Funcionario.DoesNotExist:
+            raise Http404("Funcionário não encontrado")
 
 
 @extend_schema_view(

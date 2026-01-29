@@ -7,10 +7,10 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from empresa.models import Empresa, CategoriaEmpresa, ConexaoBanco, Funcionario, RotasPermitidas, STATUS_CHOICES
-import sistema
+
 from sistema.models import GrupoRotaSistema
 
-from sistema.models import EmpresaSistema, Sistema, EmpresaSistema
+from sistema.models import EmpresaSistema, Sistema
 from sistema.serializer import GrupoRotaSistemaListSerializer
 
 from cloud.cliente.models import Cliente, StatusChoices, Segmento
@@ -76,7 +76,7 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
         }
 
     def validate(self, attrs):
-        # 🔥 Pega o usuário específico se enviado
+        # Pega o usuário específico se enviado
         usuario_especifico = attrs.pop('usuario_especifico', None)
 
         # Salva no contexto para usar depois
@@ -93,10 +93,6 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
         matriz_filial = attrs.get('matriz_filial', None)
         sistema = attrs.get('sistema', None)
         categoria = attrs.get('categoria')
-
-        print(f"DEBUG - usuario_especifico: {usuario_especifico}")
-        print(f"DEBUG - request_user: {request_user}")
-        print(f"DEBUG - user para validação: {user}")
 
         # Sistema é obrigatório
         if sistema is None:
@@ -322,10 +318,12 @@ class FuncionarioSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True)
     empresa_id = serializers.IntegerField(write_only=True)
+    first_name = serializers.CharField(write_only=True)
+    last_name = serializers.CharField(write_only=True)
 
     class Meta:
         model = Funcionario
-        fields = ['empresa_id', 'username', 'email', 'password', 'role', 'status']
+        fields = ['empresa_id', 'username', 'email', 'password', 'role', 'status', 'first_name', 'last_name']
 
     def validate(self, attrs):
         instance = getattr(self, 'instance', None)
@@ -387,9 +385,17 @@ class FuncionarioSerializer(serializers.ModelSerializer):
         username = validated_data.pop('username')
         email = validated_data.pop('email')
         password = validated_data.pop('password')
+        first_name = validated_data.pop('first_name')
+        last_name = validated_data.pop('last_name')
         role = validated_data.get('role', Funcionario.FUNCIONARIO)
 
-        user, created = User.objects.get_or_create(username=username, defaults={'email': email})
+        user, created = User.objects.get_or_create(
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            defaults={'email': email}
+        )
+
         if created:
             user.set_password(password)
             user.save()
