@@ -12,7 +12,9 @@ from .views import (
     LeadCheckDuplicityView,
     LeadGenerateStrategyView,
     LeadBulkDeleteView,
-    LeadLastTimestampsView
+    LeadLastTimestampsView,
+    LeadExportView,
+    LeadImportView
 )
 
 urlpatterns = [
@@ -31,6 +33,8 @@ urlpatterns = [
 
     # Lead
     path('leads/', LeadListCreateView.as_view()),
+    path('leads/export/', LeadExportView.as_view()),
+    path('leads/import/', LeadImportView.as_view()),
     path('leads/<int:pk>/', LeadRetrieveUpdateDestroyView.as_view()),
     path('leads/check-duplicity/', LeadCheckDuplicityView.as_view()),
     path('leads/generate-strategy/', LeadGenerateStrategyView.as_view()),

@@ -111,3 +111,7 @@ class LeadSerializer(serializers.ModelSerializer):
             instance.contatos.exclude(id__in=keep_ids).delete()
 
         return instance
+
+
+class FileUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

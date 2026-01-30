@@ -52,6 +52,9 @@ class Lead(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Campo para Soft Delete
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return self.empresa
 
