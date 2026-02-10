@@ -22,7 +22,7 @@ class ImportService:
         # --- CORREÇÃO DO DELIMITADOR ---
         first_line = io_string.readline()
         # Retorna ao início
-        io_string.seek(0) 
+        io_string.seek(0)
         delimiter = ';' if ';' in first_line else ','
 
         reader = csv.DictReader(io_string, delimiter=delimiter)

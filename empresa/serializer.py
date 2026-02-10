@@ -2,6 +2,7 @@ import re
 
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models import Q
 
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
@@ -320,10 +321,11 @@ class FuncionarioSerializer(serializers.ModelSerializer):
     empresa_id = serializers.IntegerField(write_only=True)
     first_name = serializers.CharField(write_only=True)
     last_name = serializers.CharField(write_only=True)
+    sistema = serializers.CharField(write_only=True)
 
     class Meta:
         model = Funcionario
-        fields = ['empresa_id', 'username', 'email', 'password', 'role', 'status', 'first_name', 'last_name']
+        fields = ['empresa_id', 'username', 'email', 'password', 'role', 'status', 'first_name', 'last_name', 'sistema']
 
     def validate(self, attrs):
         instance = getattr(self, 'instance', None)
@@ -388,16 +390,30 @@ class FuncionarioSerializer(serializers.ModelSerializer):
         first_name = validated_data.pop('first_name')
         last_name = validated_data.pop('last_name')
         role = validated_data.get('role', Funcionario.FUNCIONARIO)
+        sistema = validated_data.get('sistema')
+
+        if sistema == 'centralLeads':
+            if User.objects.filter(Q(username=username) | Q(email=email)).exists():
+                raise ValidationError({
+                    "usuario": "Este usuário já existe no sistema (username ou email)."
+                })
 
         user, created = User.objects.get_or_create(
             username=username,
-            first_name=first_name,
-            last_name=last_name,
-            defaults={'email': email}
+            defaults={
+                'email': email,
+                'first_name': first_name,
+                'last_name': last_name,
+            }
         )
 
         if created:
             user.set_password(password)
+            user.save()
+        else:
+            user.first_name = first_name
+            user.last_name = last_name
+            user.email = email
             user.save()
 
         empresa = Empresa.objects.get(id=empresa_id)

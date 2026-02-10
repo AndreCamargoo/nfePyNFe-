@@ -1,12 +1,6 @@
 import os
 import requests
 import json
-import google.generativeai as genai
-from django.conf import settings
-
-
-if hasattr(settings, 'GEMINI_API_KEY'):
-    genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # Idealmente, use variáveis de ambiente: os.environ.get("GEMINI_API_KEY")
 API_KEY = os.environ.get("GEMINI_API_KEY")
