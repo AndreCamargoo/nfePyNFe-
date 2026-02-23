@@ -1,20 +1,11 @@
 from django.urls import path
 from .views import (
-    CompanyListCreateView,
-    CompanyRetrieveUpdateDestroyView,
-    ProductListCreateView,
-    ProductRetrieveUpdateDestroyView,
-    EventListCreateView,
-    EventRetrieveUpdateDestroyView,
-    EventGenerateEmailView,
-    LeadListCreateView,
-    LeadRetrieveUpdateDestroyView,
-    LeadCheckDuplicityView,
-    LeadGenerateStrategyView,
-    LeadBulkDeleteView,
-    LeadLastTimestampsView,
-    LeadExportView,
-    LeadImportView
+    CompanyListCreateView, CompanyRetrieveUpdateDestroyView,
+    ProductListCreateView, ProductRetrieveUpdateDestroyView,
+    EventListCreateView, EventRetrieveUpdateDestroyView, EventGenerateEmailView,
+    LeadListCreateView, LeadRetrieveUpdateDestroyView, LeadCheckDuplicityView, LeadGenerateStrategyView,
+    LeadBulkDeleteView, LeadLastTimestampsView, LeadExportView, LeadImportView,
+    CnesListView, CnesImportView
 )
 
 urlpatterns = [
@@ -42,4 +33,8 @@ urlpatterns = [
 
     # Lead last timestamps
     path('leads/last-timestamps/', LeadLastTimestampsView.as_view()),
+
+    # Cnes
+    path('cnes/', CnesListView.as_view()),
+    path('cnes/import/', CnesImportView.as_view()),
 ]

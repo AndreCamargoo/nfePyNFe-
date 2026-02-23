@@ -69,3 +69,33 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.nome} - {self.lead.empresa}"
+
+
+class Cnes(models.Model):
+    razao_social = models.CharField(max_length=150)
+    fantasia = models.CharField(max_length=150)
+    cod_nat_jur = models.CharField(max_length=20)
+    natureza_juridica = models.CharField(max_length=150)
+    cnes = models.CharField(max_length=50)
+    cpf_cnpj = models.CharField(max_length=50)
+    tipo_unidade = models.CharField(max_length=150)
+    endereco = models.CharField(max_length=255, blank=True, null=True)
+    cidade = models.CharField(max_length=200)
+    uf = models.CharField(max_length=2)
+    telefone = models.CharField(max_length=100, blank=True, null=True)
+    faturamento_sus_2020 = models.DecimalField(max_digits=17, decimal_places=2, default=0.00)
+    qtde_leitos = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    file = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        db_table = 'cnes'
+        indexes = [
+            models.Index(fields=['cidade']),
+            models.Index(fields=['uf']),
+            models.Index(fields=['cnes']),
+            models.Index(fields=['cpf_cnpj']),
+        ]

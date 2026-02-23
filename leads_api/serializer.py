@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, Product, Event, Lead, Contact
+from .models import Company, Product, Event, Lead, Contact, Cnes
 from django.contrib.auth.models import User
 
 
@@ -114,4 +114,14 @@ class LeadSerializer(serializers.ModelSerializer):
 
 
 class FileUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class CnesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cnes
+        fields = '__all__'
+
+
+class CnesFileUploadSerializer(serializers.Serializer):
     file = serializers.FileField()

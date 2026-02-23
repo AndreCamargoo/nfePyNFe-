@@ -1,19 +1,20 @@
 import csv
 import json
+import chardet
+
 from django.http import HttpResponse
 from django.utils import timezone
+
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from leads_api.models import Company, Product, Event, Lead
+from leads_api.models import Company, Product, Event, Lead, Cnes
 from leads_api.serializer import (
-    CompanySerializer,
-    ProductSerializer,
-    EventSerializer,
-    LeadSerializer,
-    FileUploadSerializer
+    CompanySerializer, ProductSerializer, EventSerializer,
+    LeadSerializer, FileUploadSerializer,
+    CnesFileUploadSerializer, CnesSerializer
 )
 
 from .services.gemini import GeminiService
@@ -21,10 +22,13 @@ from .services.duplication import DuplicationService
 
 from app.utils import utils
 from django_filters.rest_framework import DjangoFilterBackend
-from .filters import LeadsFilter
+from .filters import LeadsFilter, CnesFilter
 
 from .services.import_service import ImportService
 from rest_framework.parsers import MultiPartParser, FormParser
+from decimal import Decimal, InvalidOperation
+
+from django.db import transaction
 
 
 class CompanyListCreateView(generics.ListCreateAPIView):
@@ -255,3 +259,130 @@ class LeadImportView(APIView):
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CnesListView(generics.ListAPIView):
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = CnesFilter
+    queryset = Cnes.objects.all().order_by('id')
+    serializer_class = CnesSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = utils.CustomPageSizePagination
+
+
+class CnesImportView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def parse_decimal(self, value):
+        """
+        pip install chardet
+
+        Trata decimal com:
+        - 1.234,56
+        - 1234.56
+        - vazio
+        """
+        if not value:
+            return Decimal("0.00")
+
+        value = value.strip()
+
+        # Se vier formato brasileiro 1.234,56
+        if "," in value and "." in value:
+            value = value.replace(".", "").replace(",", ".")
+        elif "," in value:
+            value = value.replace(",", ".")
+
+        try:
+            return Decimal(value)
+        except InvalidOperation:
+            return Decimal("0.00")
+
+    def parse_int(self, value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def post(self, request, *args, **kwargs):
+        serializer = CnesFileUploadSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        file = serializer.validated_data['file']
+
+        # ==========================
+        # Detectar encoding automaticamente
+        # ==========================
+        raw_data = file.read()
+        result = chardet.detect(raw_data)
+        encoding = result.get("encoding") or "utf-8"
+
+        try:
+            decoded_file = raw_data.decode(encoding)
+        except UnicodeDecodeError:
+            decoded_file = raw_data.decode("latin1")
+
+        reader = csv.DictReader(decoded_file.splitlines(), delimiter=';')
+
+        batch = []
+        BATCH_SIZE = 5000
+        total_imported = 0
+
+        try:
+            with transaction.atomic():
+                for row in reader:
+
+                    # Ignora linha totalmente vazia
+                    if not any(row.values()):
+                        continue
+
+                    batch.append(
+                        Cnes(
+                            razao_social=row.get('razao_social', '').strip(),
+                            fantasia=row.get('fantasia', '').strip(),
+                            cod_nat_jur=row.get('cod_nat_jur', '').strip(),
+                            natureza_juridica=row.get('natureza_juridica', '').strip(),
+                            cnes=row.get('cnes', '').strip(),
+                            cpf_cnpj=row.get('cpf_cnpj', '').strip(),
+                            tipo_unidade=row.get('tipo_unidade', '').strip(),
+                            endereco=row.get('endereco') or None,
+                            cidade=row.get('cidade', '').strip(),
+                            uf=row.get('uf', '').strip(),
+                            telefone=row.get('telefone') or None,
+                            faturamento_sus_2020=self.parse_decimal(
+                                row.get('faturamento_sus_2020')
+                            ),
+                            qtde_leitos=self.parse_int(
+                                row.get('qtde_leitos')
+                            ),
+                            file=file.name
+                        )
+                    )
+
+                    if len(batch) >= BATCH_SIZE:
+                        Cnes.objects.bulk_create(batch, batch_size=BATCH_SIZE)
+                        total_imported += len(batch)
+                        batch = []
+
+                # Inserir restante
+                if batch:
+                    Cnes.objects.bulk_create(batch, batch_size=BATCH_SIZE)
+                    total_imported += len(batch)
+
+            return Response({
+                "status": "success",
+                "encoding_detected": encoding,
+                "imported": total_imported
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )

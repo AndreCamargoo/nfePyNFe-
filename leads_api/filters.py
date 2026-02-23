@@ -1,6 +1,6 @@
 import django_filters
 from django.db.models import Q
-from .models import Lead
+from .models import Lead, Cnes
 
 
 class LeadsFilter(django_filters.FilterSet):
@@ -35,3 +35,48 @@ class LeadsFilter(django_filters.FilterSet):
         )
         # .distinct() é importante quando filtramos por relacionamentos (contatos) para evitar duplicatas
         return queryset.filter(filters).distinct()
+
+
+class CnesFilter(django_filters.FilterSet):
+    # Busca geral
+    q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
+
+    # Filtros texto
+    razao_social = django_filters.CharFilter(field_name='razao_social', lookup_expr='icontains')
+    fantasia = django_filters.CharFilter(field_name='fantasia', lookup_expr='icontains')
+    cidade = django_filters.CharFilter(field_name='cidade', lookup_expr='icontains')
+    uf = django_filters.CharFilter(field_name='uf', lookup_expr='iexact')
+    cnes = django_filters.CharFilter(field_name='cnes', lookup_expr='exact')
+    cpf_cnpj = django_filters.CharFilter(field_name='cpf_cnpj', lookup_expr='icontains')
+    tipo_unidade = django_filters.CharFilter(field_name='tipo_unidade', lookup_expr='icontains')
+
+    # Filtros numéricos
+    qtde_leitos_min = django_filters.NumberFilter(field_name='qtde_leitos', lookup_expr='gte')
+    qtde_leitos_max = django_filters.NumberFilter(field_name='qtde_leitos', lookup_expr='lte')
+
+    faturamento_min = django_filters.NumberFilter(field_name='faturamento_sus_2020', lookup_expr='gte')
+    faturamento_max = django_filters.NumberFilter(field_name='faturamento_sus_2020', lookup_expr='lte')
+
+    class Meta:
+        model = Cnes
+        fields = [
+            'razao_social',
+            'fantasia',
+            'cidade',
+            'uf',
+            'cnes',
+            'cpf_cnpj',
+            'tipo_unidade',
+        ]
+
+    def filter_by_q(self, queryset, name, value):
+        if not value:
+            return queryset
+
+        filters = (
+            Q(razao_social__icontains=value) | Q(fantasia__icontains=value) |
+            Q(cnes__icontains=value) | Q(cpf_cnpj__icontains=value) |
+            Q(cidade__icontains=value)
+        )
+
+        return queryset.filter(filters)
