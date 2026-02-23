@@ -55,6 +55,7 @@ if DEBUG:
         "http://127.0.0.1:8000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5500",
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais em desenvolvimento
 
@@ -65,28 +66,41 @@ if DEBUG:
         "http://127.0.0.1:8000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5500",
     ]
 else:
     # Em produção, permitir apenas origens específicas
     CORS_ALLOWED_ORIGINS = [
+        "https://api.allnube.com.br",
+
         "https://allnube.com.br",
         "https://www.allnube.com.br",
-        "https://api.allnube.com.br",
+
         "https://agendagrupo.azevedo.cnt.br",
         "https://www.agendagrupo.azevedo.cnt.br",
+
         "https://leads.azv.tec.br",
-        "https://www.leads.azv.tec.br"
+        "https://www.leads.azv.tec.br",
+
+        "https://dbresumof.numb3rs.com.br",
+        "https://www.dbresumof.numb3rs.com.br",
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
     CSRF_TRUSTED_ORIGINS = [
+        "https://api.allnube.com.br",
+
         "https://allnube.com.br",
         "https://www.allnube.com.br",
-        "https://api.allnube.com.br",
+
         'https://agendagrupo.azevedo.cnt.br',
         'https://www.agendagrupo.azevedo.cnt.br',
+
         "https://leads.azv.tec.br/",
-        "https://www.leads.azv.tec.br/"
+        "https://www.leads.azv.tec.br/",
+
+        "https://dbresumof.numb3rs.com.br",
+        "https://www.dbresumof.numb3rs.com.br",
     ]
 
 # Cabeçalhos permitidos para CORS
