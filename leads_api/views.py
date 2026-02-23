@@ -262,11 +262,11 @@ class LeadImportView(APIView):
 
 
 class CnesListView(generics.ListAPIView):
+    # permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_class = CnesFilter
     queryset = Cnes.objects.all().order_by('id')
     serializer_class = CnesSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = utils.CustomPageSizePagination
 
 
