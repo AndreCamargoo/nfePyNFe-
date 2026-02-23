@@ -92,7 +92,7 @@ class LeadListCreateView(generics.ListCreateAPIView):
     serializer_class = LeadSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = LeadsFilter
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
     pagination_class = utils.CustomPageSizePagination
 
 
