@@ -50,12 +50,12 @@ class ProductListCreateView(generics.ListCreateAPIView):
     pagination_class = utils.CustomPageSizePagination
 
     def paginate_queryset(self, queryset):
-        paginate = self.request.query_params.get("paginate", "false")
+        paginate = self.request.query_params.get("paginate", "true")
 
-        if paginate.lower() in ["true", "1", "yes"]:
-            return super().paginate_queryset(queryset)
+        if paginate.lower() in ["false", "0", "no"]:
+            return None  # desativa paginação somente se pedir explicitamente
 
-        return None  # padrão SEM paginação
+        return super().paginate_queryset(queryset)
 
 
 class ProductRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
