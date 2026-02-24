@@ -46,7 +46,16 @@ class CompanyRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 class ProductListCreateView(generics.ListCreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
+    pagination_class = utils.CustomPageSizePagination
+
+    def paginate_queryset(self, queryset):
+        paginate = self.request.query_params.get("paginate", "false")
+
+        if paginate.lower() in ["true", "1", "yes"]:
+            return super().paginate_queryset(queryset)
+
+        return None  # padrão SEM paginação
 
 
 class ProductRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
