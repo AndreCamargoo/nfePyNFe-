@@ -118,10 +118,34 @@ class LeadSerializer(serializers.ModelSerializer):
             return
 
         try:
+            # Tenta baixar o arquivo
             response = requests.get(anexo_url, timeout=10)
-            response.raise_for_status()
+            response.raise_for_status()  # dispara exceção se não 200
             arquivo = BytesIO(response.content)
 
+        except Exception as e:
+            logger.error(f"Arquivo S3 não encontrado para Lead {lead.id}: {str(e)}")
+            # Email interno avisando que não foi possível enviar para o cliente
+            try:
+                assunto = f"[URGENTE] Falha no envio de relatório - Lead {lead.id}"
+                corpo = f"""
+                Não foi possível enviar o relatório para o cliente {lead.empresa} (Lead {lead.id}).
+                Motivo: arquivo S3 não encontrado ou erro ao baixar.
+                Tentativa de arquivo: {anexo_url}
+                """
+                email_interno = EmailMessage(
+                    subject=assunto,
+                    body=corpo,
+                    from_email=settings.DEFAULT_NUMB3RS_FROM_EMAIL,
+                    to=["andre.camargo@msn.com"]
+                )
+                email_interno.send(fail_silently=True)
+            except Exception as e2:
+                logger.error(f"Erro ao enviar email interno para aviso de falha S3: {str(e2)}")
+            return  # cancela envio para o cliente
+
+        # Se chegou aqui, arquivo está ok, envia para o cliente
+        try:
             connection = get_connection(
                 backend=settings.EMAIL_NUMB3RS_BACKEND,
                 host=settings.EMAIL_NUMB3RS_HOST,
