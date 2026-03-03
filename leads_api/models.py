@@ -1,4 +1,5 @@
 from django.db import models
+from app.core.auditoria_abstrato import AuditModel
 
 
 class Company(models.Model):
@@ -31,7 +32,7 @@ class Event(models.Model):
         return f"{self.nome} ({self.data})"
 
 
-class Lead(models.Model):
+class Lead(AuditModel):
     """Refere-se a 'LEADS'"""
     empresa = models.CharField(max_length=255)
     cnpj = models.CharField(max_length=20, blank=True, null=True)
@@ -52,20 +53,23 @@ class Lead(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Campo para Soft Delete
-    deleted_at = models.DateTimeField(null=True, blank=True)
+    # NOVOS CAMPOS (apenas esses, sem duplicar created_at/updated_at)
+    apelido = models.CharField(max_length=255, null=True, blank=True)
+    cod_nat_jur = models.CharField(max_length=20, null=True, blank=True)
+    natureza_juridica = models.CharField(max_length=150, null=True, blank=True)
 
     def __str__(self):
         return self.empresa
 
 
-class Contact(models.Model):
+class Contact(AuditModel):
     """Refere-se a 'contatos' dentro de LEADS"""
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='contatos')
     nome = models.CharField(max_length=255)
     setor = models.CharField(max_length=100, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
     celular = models.CharField(max_length=20, blank=True, null=True)
+    email_extra = models.EmailField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.nome} - {self.lead.empresa}"

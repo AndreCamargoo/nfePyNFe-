@@ -104,6 +104,11 @@ class LeadListCreateView(generics.ListCreateAPIView):
     # permission_classes = [IsAuthenticated]
     pagination_class = utils.CustomPageSizePagination
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
 
 class LeadRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     # Garante que não acessa leads deletados via ID
@@ -112,8 +117,21 @@ class LeadRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
-        # Soft Delete: Marca a data de exclusão em vez de remover do banco
+        # Soft Delete: Marca a data de exclusão e o usuário que deletou
+        request = self.request
+        user = request.user if request and hasattr(request, 'user') else None
+
+        # Soft delete em todos os contatos relacionados
+        for contato in instance.contatos.all():
+            contato.deleted_at = timezone.now()
+            if user and user.is_authenticated:
+                contato.deleted_by = user
+            contato.save()
+
+        # Soft delete no Lead
         instance.deleted_at = timezone.now()
+        if user and user.is_authenticated:
+            instance.deleted_by = user
         instance.save()
 
 

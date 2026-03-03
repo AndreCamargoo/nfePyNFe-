@@ -9,6 +9,7 @@ class LeadsFilter(django_filters.FilterSet):
 
     # Filtros exatos ou parciais para campos de texto
     empresa = django_filters.CharFilter(field_name='empresa', lookup_expr='icontains')
+    apelido = django_filters.CharFilter(field_name='apelido', lookup_expr='icontains')
     cnpj = django_filters.CharFilter(field_name='cnpj', lookup_expr='icontains')
     cidade = django_filters.CharFilter(field_name='cidade', lookup_expr='icontains')
     estado = django_filters.CharFilter(field_name='estado', lookup_expr='iexact')
@@ -23,7 +24,11 @@ class LeadsFilter(django_filters.FilterSet):
 
     class Meta:
         model = Lead
-        fields = ['empresa', 'cnpj', 'cidade', 'estado', 'segmento', 'classificacao', 'origem', 'empresas_grupo', 'produtos_interesse']
+        fields = [
+            'empresa', 'apelido', 'cnpj', 'cidade', 'estado',
+            'segmento', 'classificacao', 'origem',
+            'empresas_grupo', 'produtos_interesse'
+        ]
 
     def filter_by_q(self, queryset, name, value):
         if not value:
@@ -31,7 +36,7 @@ class LeadsFilter(django_filters.FilterSet):
 
         # Busca por: Nome Empresa OU CNPJ OU Cidade OU Nome de algum Contato
         filters = (
-            Q(empresa__icontains=value) | Q(cnpj__icontains=value) | Q(cidade__icontains=value) | Q(contatos__nome__icontains=value)
+            Q(empresa__icontains=value) | Q(apelido__icontains=value) | Q(cnpj__icontains=value) | Q(cidade__icontains=value) | Q(contatos__nome__icontains=value)
         )
         # .distinct() é importante quando filtramos por relacionamentos (contatos) para evitar duplicatas
         return queryset.filter(filters).distinct()

@@ -180,6 +180,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'app.core.middleware.CurrentUserMiddleware',
 ]
 
 ROOT_URLCONF = 'app.urls'
@@ -283,15 +284,23 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
 
-# ==================== EMAIL ====================
-
+# ==================== EMAIL BALANÇO ===========================
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
+EMAIL_HOST = os.getenv('EMAIL_BALANCO_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_BALANCO_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_BALANCO_USE_TLS', 'True').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_BALANCO_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_BALANCO_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_BALANCO_FROM_EMAIL', '')
+
+# ==================== EMAIL NUMB3RS ===========================
+EMAIL_NUMB3RS_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_NUMB3RS_HOST = os.getenv('EMAIL_NUMB3RS_HOST', 'smtp.gmail.com')
+EMAIL_NUMB3RS_PORT = int(os.getenv('EMAIL_NUMB3RS_PORT', 587))
+EMAIL_NUMB3RS_USE_TLS = os.getenv('EMAIL_NUMB3RS_USE_TLS', 'True').lower() == 'true'
+EMAIL_NUMB3RS_HOST_USER = os.getenv('EMAIL_NUMB3RS_HOST_USER', '')
+EMAIL_NUMB3RS_HOST_PASSWORD = os.getenv('EMAIL_NUMB3RS_HOST_PASSWORD', '')
+DEFAULT_NUMB3RS_FROM_EMAIL = os.getenv('DEFAULT_NUMB3RS_FROM_EMAIL', '')
 
 # ==================== DJANGO REST FRAMEWORK ====================
 
