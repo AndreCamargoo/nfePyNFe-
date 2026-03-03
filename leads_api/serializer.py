@@ -66,37 +66,41 @@ class LeadSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         envio_email = validated_data.pop('envio_email', False)
         origem_lp = validated_data.pop('origem_lp', None)
+
         contatos_data = validated_data.pop('contatos', [])
         empresas_data = validated_data.pop('empresas_grupo', [])
         produtos_data = validated_data.pop('produtos_interesse', [])
 
+        # Pega o usuário do contexto da requisição
         request = self.context.get('request')
         user = request.user if request and hasattr(request, 'user') else None
 
+        # Cria o Lead
         lead = Lead.objects.create(**validated_data)
 
+        # Define ManyToMany
         lead.empresas_grupo.set(empresas_data)
         lead.produtos_interesse.set(produtos_data)
 
-        # Cria contatos e guarda referência
-        contatos_objs = []
+        # Cria contatos
         for contato_data in contatos_data:
             if user and user.is_authenticated:
                 contato_data['created_by'] = user
-            c = Contact.objects.create(lead=lead, **contato_data)
-            contatos_objs.append(c)
+            Contact.objects.create(lead=lead, **contato_data)
 
-        # Disparo de email
-        if envio_email and origem_lp and contatos_objs:
-            self._enviar_email_lead(lead, origem_lp, contato=contatos_objs[0])
+        # 🔹 Disparo de email apenas se marcado e origem_lp definido
+        if envio_email and origem_lp and contatos_data:
+            # Pega apenas o primeiro contato
+            primeiro_contato = contatos_data[0]
+            self._enviar_email_lead(lead, origem_lp, primeiro_contato)
 
         return lead
 
-    def _enviar_email_lead(self, lead, origem_lp, contato=None):
-        if contato is None:
-            contato = lead.contatos.first()
-        if not contato:
-            logger.warning(f"Lead {lead.id} sem contato. Email não enviado.")
+    def _enviar_email_lead(self, lead, origem_lp, contato_data):
+        nome = contato_data.get('nome')
+        email_destino = contato_data.get('email')
+        if not email_destino:
+            logger.warning(f"Lead {lead.id} sem email. Email não enviado.")
             return
 
         # Define URL e nome do arquivo
@@ -114,12 +118,10 @@ class LeadSerializer(serializers.ModelSerializer):
             return
 
         try:
-            # Download do anexo com timeout
             response = requests.get(anexo_url, timeout=10)
             response.raise_for_status()
             arquivo = BytesIO(response.content)
 
-            # Conexão SMTP
             connection = get_connection(
                 backend=settings.EMAIL_NUMB3RS_BACKEND,
                 host=settings.EMAIL_NUMB3RS_HOST,
@@ -131,7 +133,7 @@ class LeadSerializer(serializers.ModelSerializer):
 
             subject = "Relatório Analítico - Numb3rs Gov"
             body = f"""
-            Olá {contato.nome},
+            Olá {nome},
 
             Conforme solicitado, segue em anexo o relatório Numb3rs Gov.
 
@@ -144,16 +146,16 @@ class LeadSerializer(serializers.ModelSerializer):
                 subject,
                 body,
                 settings.DEFAULT_NUMB3RS_FROM_EMAIL,
-                [contato.email],
+                [email_destino],
                 connection=connection
             )
             email.attach(nome_arquivo, arquivo.read())
             email.send(fail_silently=False)
 
-            logger.info(f"Email enviado com sucesso para {contato.email} (Lead {lead.id})")
+            logger.info(f"Email enviado com sucesso para {email_destino} (Lead {lead.id})")
 
         except Exception as e:
-            logger.error(f"Erro ao enviar email do Lead {lead.id}: {str(e)}")
+            logger.error(f"Erro ao enviar email do Lead {lead.id} para {email_destino}: {str(e)}")
 
     def update(self, instance, validated_data):
         contatos_data = validated_data.pop('contatos', None)
