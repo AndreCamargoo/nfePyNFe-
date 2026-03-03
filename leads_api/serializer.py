@@ -99,6 +99,17 @@ class LeadSerializer(serializers.ModelSerializer):
     def _enviar_email_lead(self, lead, origem_lp, contato_data):
         nome = contato_data.get('nome')
         email_destino = contato_data.get('email')
+
+        # 🔹 Cria a conexão SMTP apenas uma vez
+        connection = get_connection(
+            backend=settings.EMAIL_NUMB3RS_BACKEND,
+            host=settings.EMAIL_NUMB3RS_HOST,
+            port=settings.EMAIL_NUMB3RS_PORT,
+            username=settings.EMAIL_NUMB3RS_HOST_USER,
+            password=settings.EMAIL_NUMB3RS_HOST_PASSWORD,
+            use_tls=settings.EMAIL_NUMB3RS_USE_TLS,
+        )
+
         if not email_destino:
             logger.warning(f"Lead {lead.id} sem email. Email não enviado.")
             return
@@ -125,7 +136,7 @@ class LeadSerializer(serializers.ModelSerializer):
 
         except Exception as e:
             logger.error(f"Arquivo S3 não encontrado para Lead {lead.id}: {str(e)}")
-            # Email interno avisando que não foi possível enviar para o cliente
+            # 🔹 Email interno usando a mesma conexão
             try:
                 assunto = f"[URGENTE] Falha no envio de relatório - Lead {lead.id}"
                 corpo = f"""
@@ -137,24 +148,17 @@ class LeadSerializer(serializers.ModelSerializer):
                     subject=assunto,
                     body=corpo,
                     from_email=settings.DEFAULT_NUMB3RS_FROM_EMAIL,
-                    to=["andre.camargo@msn.com"]
+                    to=["andre.camargo@msn.com"],
+                    connection=connection  # usa a mesma conexão
                 )
-                email_interno.send(fail_silently=True)
+                email_interno.send(fail_silently=False)  # força exceção se falhar
+                logger.info(f"Email interno de falha enviado para andre.camargo@msn.com (Lead {lead.id})")
             except Exception as e2:
-                logger.error(f"Erro ao enviar email interno para aviso de falha S3: {str(e2)}")
+                logger.error(f"Erro ao enviar email interno de aviso de falha S3: {str(e2)}")
             return  # cancela envio para o cliente
 
         # Se chegou aqui, arquivo está ok, envia para o cliente
         try:
-            connection = get_connection(
-                backend=settings.EMAIL_NUMB3RS_BACKEND,
-                host=settings.EMAIL_NUMB3RS_HOST,
-                port=settings.EMAIL_NUMB3RS_PORT,
-                username=settings.EMAIL_NUMB3RS_HOST_USER,
-                password=settings.EMAIL_NUMB3RS_HOST_PASSWORD,
-                use_tls=settings.EMAIL_NUMB3RS_USE_TLS,
-            )
-
             subject = "Relatório Analítico - Numb3rs Gov"
             body = f"""
             Olá {nome},
