@@ -2,15 +2,18 @@ import csv
 import json
 import io
 import re
+import ast
+import logging
 from leads_api.models import Lead, Company, Product, Contact
 from django.db import transaction
 from django.db.models import Q
+
+logger = logging.getLogger(__name__)
 
 
 class ImportService:
     @staticmethod
     def process_csv(file, duplicate=True):
-        # Tenta decodificar o arquivo (UTF-8 ou Latin-1/ISO-8859-1 comum no Excel BR)
         try:
             decoded_file = file.read().decode('utf-8')
         except UnicodeDecodeError:
@@ -18,10 +21,7 @@ class ImportService:
             decoded_file = file.read().decode('latin-1')
 
         io_string = io.StringIO(decoded_file)
-
-        # --- CORREÇÃO DO DELIMITADOR ---
         first_line = io_string.readline()
-        # Retorna ao início
         io_string.seek(0)
         delimiter = ';' if ';' in first_line else ','
 
@@ -33,151 +33,210 @@ class ImportService:
             "errors": []
         }
 
-        field_map = ImportService._get_field_map()
-
         with transaction.atomic():
-            for index, row in enumerate(reader):
+            for index, row in enumerate(reader, start=2):
                 try:
+                    # Limpa os cabeçalhos
                     clean_row = {}
                     for k, v in row.items():
-                        if not k: continue
-                        clean_key = k.strip().replace('\ufeff', '')
+                        if not k:
+                            continue
+                        clean_key = k.strip().replace('\ufeff', '').strip()
+                        clean_row[clean_key] = v.strip() if v else ""
 
-                        normalized_key = None
-                        for map_key, map_list in field_map.items():
-                            if any(x.lower() == clean_key.lower() for x in map_list):
-                                normalized_key = map_key
-                                break
-
-                        if not normalized_key:
-                            for map_key, map_list in field_map.items():
-                                if any(x.lower() in clean_key.lower() for x in map_list):
-                                    normalized_key = map_key
-                                    break
-
-                        if normalized_key:
-                            clean_row[normalized_key] = v.strip() if v else ""
-
-                    if not clean_row.get('empresa'):
+                    if not clean_row.get('Empresa'):
                         continue
 
-                    ImportService._process_row(clean_row, results, duplicate=duplicate)
+                    ImportService._process_row(clean_row, results, duplicate)
 
                 except Exception as e:
-                    results['errors'].append(f"Linha {index + 2}: {str(e)}")
+                    results['errors'].append(f"Linha {index}: {str(e)}")
+                    logger.error(f"Erro na linha {index}: {str(e)}")
 
         return results
 
     @staticmethod
-    def _get_field_map():
-        return {
-            'empresa': ['Empresa', 'Razão Social', 'Fantasia', 'Nome'],
-            'cnpj': ['CNPJ'],
-            'cnes': ['CNES', 'CNS'],
-            'telefone': ['Telefone', 'Tel', 'Fixo'],
-            'cidade': ['Cidade', 'Município'],
-            'estado': ['Estado', 'UF'],
-            'segmento': ['Segmento', 'Área'],
-            'classificacao': ['Classificação', 'Status', 'Situação'],
-            'origem': ['Origem', 'Fonte'],
-            'empresas_grupo': ['Empresas do Grupo', 'Grupo'],
-            'produtos_interesse': ['Produtos', 'Interesse', 'Produtos de Interesse'],
-            'contatos_json': ['Contatos (JSON)', 'JSON', 'Contatos'],
-            'contato_nome': ['Nome Contato', 'Contato Nome'],
-            'contato_email': ['Email Contato', 'Contato Email'],
-            'contato_celular': ['Celular', 'Móvel', 'Whatsapp', 'Contato Celular'],
-            'contato_setor': ['Cargo', 'Setor', 'Departamento']
-        }
+    def _parse_contacts_json(json_str):
+        """
+        Parseia JSON de contatos de forma inteligente, lidando com vários formatos
+        """
+        if not json_str or json_str == '[]':
+            return []
+
+        # Remove aspas externas se houver
+        original = json_str
+        if json_str.startswith('"') and json_str.endswith('"'):
+            json_str = json_str[1:-1]
+
+        # Corrige escapes comuns
+        json_str = json_str.replace('\\"', '"')
+
+        # Tenta diferentes estratégias de parsing
+        strategies = [
+            # Estratégia 1: JSON normal
+            lambda s: json.loads(s),
+
+            # Estratégia 2: Python literal (mais flexível)
+            lambda s: ast.literal_eval(s),
+
+            # Estratégia 3: Corrige chaves sem aspas
+            lambda s: json.loads(re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', s)),
+
+            # Estratégia 4: Remove aspas simples e tenta novamente
+            lambda s: json.loads(s.replace("'", '"')),
+
+            # Estratégia 5: Combina estratégias 3 e 4
+            lambda s: json.loads(re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', s.replace("'", '"'))),
+        ]
+
+        for i, strategy in enumerate(strategies):
+            try:
+                result = strategy(json_str)
+                if isinstance(result, list):
+                    logger.info(f"JSON parsed successfully with strategy {i+1}")
+                    return result
+            except Exception as e:
+                logger.debug(f"Strategy {i+1} failed: {str(e)}")
+                continue
+
+        # Se todas as estratégias falharem, tenta extrair manualmente
+        logger.warning(f"All parsing strategies failed for: {original[:100]}")
+        return ImportService._manual_extract_contacts(json_str)
+
+    @staticmethod
+    def _manual_extract_contacts(text):
+        """
+        Extração manual de contatos quando o JSON está muito mal formatado
+        """
+        contacts = []
+
+        # Tenta encontrar padrões de contatos
+        # Ex: nome: JOAO, email: joao@teste.com
+        contact_patterns = [
+            r'nome["\']?\s*:\s*["\']?([^"\'{},]+)["\']?',
+            r'email["\']?\s*:\s*["\']?([^"\'{},]+)["\']?',
+            r'email_extra["\']?\s*:\s*["\']?([^"\'{},]+)["\']?',
+            r'celular["\']?\s*:\s*["\']?([^"\'{},]+)["\']?',
+            r'setor["\']?\s*:\s*["\']?([^"\'{},]+)["\']?',
+        ]
+
+        # Divide por chaves de objetos
+        objects = re.findall(r'\{([^}]+)\}', text)
+
+        for obj in objects:
+            contact = {}
+            # Extrai nome
+            nome_match = re.search(r'nome["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            if nome_match:
+                contact['nome'] = nome_match.group(1).strip()
+
+            # Extrai email
+            email_match = re.search(r'email["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            if email_match:
+                contact['email'] = email_match.group(1).strip()
+
+            # Extrai email_extra
+            email_extra_match = re.search(r'email_extra["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            if email_extra_match:
+                contact['email_extra'] = email_extra_match.group(1).strip()
+
+            # Extrai celular
+            celular_match = re.search(r'celular["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            if celular_match:
+                contact['celular'] = celular_match.group(1).strip()
+
+            # Extrai setor
+            setor_match = re.search(r'setor["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            if setor_match:
+                contact['setor'] = setor_match.group(1).strip()
+
+            if contact.get('nome'):
+                contacts.append(contact)
+
+        return contacts
 
     @staticmethod
     def _process_row(row, results, duplicate=False):
-        empresa_nome = row['empresa'].upper()
-        cnpj_raw = row.get('cnpj', '')
+        empresa_nome = row.get('Empresa', '').upper()
+        if not empresa_nome:
+            return
 
-        # --- LÓGICA DE DEDUPLICAÇÃO MELHORADA ---
+        # Busca lead existente
         lead = None
+        cnpj_raw = row.get('CNPJ', '')
 
-        # Só busca duplicatas se o parametro duplicate for False (padrão)
-        if not duplicate:
-            # 1. Tenta buscar por CNPJ (Prioridade Máxima)
-            if cnpj_raw:
-                # Limpa CNPJ para ter apenas números
-                cnpj_digits = re.sub(r'\D', '', cnpj_raw)
+        if not duplicate and cnpj_raw:
+            cnpj_digits = re.sub(r'\D', '', cnpj_raw)
+            if cnpj_digits:
+                lead = Lead.objects.filter(
+                    Q(cnpj=cnpj_raw) | Q(cnpj=cnpj_digits) | Q(cnpj__icontains=cnpj_digits)
+                ).first()
 
-                if cnpj_digits:
-                    # Busca pelo valor exato ou pelo valor limpo (caso o banco guarde só números)
-                    # Adicionamos busca flexível para encontrar "11.111..." ou "11111..."
-                    # Tenta achar se estiver contido
-                    lead = Lead.objects.filter(Q(cnpj=cnpj_raw) | Q(cnpj=cnpj_digits) | Q(cnpj__icontains=cnpj_digits)).first()
-
-            # 2. Se não achou por CNPJ, tenta buscar pelo NOME exato
-            if not lead:
-                lead = Lead.objects.filter(empresa__iexact=empresa_nome).first()
+        if not lead and not duplicate:
+            lead = Lead.objects.filter(empresa__iexact=empresa_nome).first()
 
         is_new = False
         if not lead:
             lead = Lead(empresa=empresa_nome)
             is_new = True
 
-        # --- REATIVAR LEAD DELETADO (SOFT DELETE) ---
-        if lead.deleted_at is not None:
+        # Se estava deletado, reativa
+        if lead.deleted_at:
             lead.deleted_at = None
 
-        # --- ATUALIZAÇÃO DE CAMPOS ---
-        # Atualiza o nome da empresa se o do arquivo for diferente (Ex: "LUCAS" -> "LUCAS 2")
-        if not is_new and empresa_nome != lead.empresa:
-            lead.empresa = empresa_nome
-
-        # Prioriza dados do CSV
-        if row.get('cnpj'): lead.cnpj = row['cnpj']
-        if row.get('cnes'): lead.cnes = row['cnes']
-        if row.get('telefone'): lead.telefone = row['telefone']
-        if row.get('cidade'): lead.cidade = row['cidade'].upper()
-        if row.get('estado'): lead.estado = row['estado'].upper()
-        if row.get('segmento'): lead.segmento = row['segmento'].upper()
-        if row.get('classificacao'): lead.classificacao = row['classificacao']
-        if row.get('origem'): lead.origem = row['origem']
+        # Atualiza campos do Lead
+        lead.empresa = empresa_nome
+        lead.apelido = row.get('Apelido', '').upper() or lead.apelido
+        lead.cnes = row.get('CNES', '') or lead.cnes
+        lead.telefone = row.get('Telefone', '') or lead.telefone
+        lead.cnpj = row.get('CNPJ', '') or lead.cnpj
+        lead.cidade = row.get('Cidade', '').upper() or lead.cidade
+        lead.estado = row.get('Estado', '').upper() or lead.estado
+        lead.segmento = row.get('Segmento', '').upper() or lead.segmento
+        lead.classificacao = row.get('Classificação', '') or lead.classificacao
+        lead.origem = row.get('Origem', '') or lead.origem
+        lead.cod_nat_jur = row.get('Código Natureza Jurídica', '') or lead.cod_nat_jur
+        lead.natureza_juridica = row.get('Natureza Jurídica', '').upper() or lead.natureza_juridica
 
         if is_new and not lead.classificacao:
             lead.classificacao = 'Não Cliente'
 
         lead.save()
 
-        # Processa ManyToMany: Empresas do Grupo
-        if row.get('empresas_grupo'):
-            grupos = [g.strip().upper() for g in row['empresas_grupo'].split(',') if g.strip()]
-            for g_nome in grupos:
-                company, _ = Company.objects.get_or_create(nome=g_nome)
+        # Processa Empresas do Grupo
+        grupos_str = row.get('Empresas do Grupo', '')
+        if grupos_str:
+            for nome in [g.strip().upper() for g in grupos_str.split(',') if g.strip()]:
+                company, _ = Company.objects.get_or_create(nome=nome)
                 lead.empresas_grupo.add(company)
 
-        # Processa ManyToMany: Produtos
-        if row.get('produtos_interesse'):
-            prods = [p.strip() for p in row['produtos_interesse'].split(',') if p.strip()]
-            for p_nome in prods:
-                product, _ = Product.objects.get_or_create(nome=p_nome)
+        # Processa Produtos
+        produtos_str = row.get('Produtos', '')
+        if produtos_str:
+            for nome in [p.strip() for p in produtos_str.split(',') if p.strip()]:
+                product, _ = Product.objects.get_or_create(nome=nome)
                 lead.produtos_interesse.add(product)
 
-        # Processa Contatos (JSON)
-        if row.get('contatos_json'):
-            try:
-                json_str = row['contatos_json']
-                if json_str and json_str != '[]':
-                    contacts_data = json.loads(json_str)
-                    if isinstance(contacts_data, list):
-                        for c_data in contacts_data:
-                            ImportService._create_contact_if_not_exists(lead, c_data)
-            except json.JSONDecodeError:
-                pass
+        # Processa Contatos (JSON) - AGORA COM PARSING INTELIGENTE
+        contatos_json = row.get('Contatos (JSON)', '')
+        if contatos_json and contatos_json != '[]':
+            contacts_data = ImportService._parse_contacts_json(contatos_json)
 
-        # Processa Contato Flat
-        if row.get('contato_nome'):
-            flat_contact = {
-                'nome': row['contato_nome'],
-                'email': row.get('contato_email', ''),
-                'celular': row.get('contato_celular', ''),
-                'setor': row.get('contato_setor', '')
-            }
-            ImportService._create_contact_if_not_exists(lead, flat_contact)
+            if contacts_data:
+                for c_data in contacts_data:
+                    # Garante que todos os campos existam
+                    contact_data = {
+                        'nome': c_data.get('nome', '').upper().strip(),
+                        'setor': c_data.get('setor', '').upper().strip(),
+                        'email': c_data.get('email', '').lower().strip(),
+                        'email_extra': c_data.get('email_extra', '').lower().strip(),
+                        'celular': c_data.get('celular', '').strip()
+                    }
+
+                    if contact_data['nome']:  # Só cria se tiver nome
+                        ImportService._create_or_update_contact(lead, contact_data)
+            else:
+                results['errors'].append(f"Não foi possível parsear contatos para {empresa_nome}: {contatos_json[:100]}")
 
         if is_new:
             results['created'] += 1
@@ -185,17 +244,40 @@ class ImportService:
             results['updated'] += 1
 
     @staticmethod
-    def _create_contact_if_not_exists(lead, data):
-        nome = data.get('nome', '').upper()
+    def _create_or_update_contact(lead, data):
+        """Cria ou atualiza um contato"""
+        nome = data.get('nome', '').upper().strip()
         if not nome:
             return
 
-        # Verifica duplicidade no banco
-        if not Contact.objects.filter(lead=lead, nome__iexact=nome).exists():
+        email = data.get('email', '').lower().strip()
+        email_extra = data.get('email_extra', '').lower().strip()
+        celular = data.get('celular', '').strip()
+        setor = data.get('setor', '').upper().strip()
+
+        # Busca contato existente
+        contact = Contact.objects.filter(lead=lead, nome__iexact=nome).first()
+
+        if contact:
+            # Atualiza apenas se os novos valores não estiverem vazios
+            if email:
+                contact.email = email
+            if email_extra:
+                contact.email_extra = email_extra
+            if celular:
+                contact.celular = celular
+            if setor:
+                contact.setor = setor
+            contact.save()
+            logger.info(f"Contato atualizado: {nome} para lead {lead.empresa}")
+        else:
+            # Cria novo
             Contact.objects.create(
                 lead=lead,
                 nome=nome,
-                email=data.get('email', '').lower(),
-                celular=data.get('celular', ''),
-                setor=data.get('setor', '').upper()
+                email=email,
+                email_extra=email_extra,
+                celular=celular,
+                setor=setor
             )
+            logger.info(f"Contato criado: {nome} para lead {lead.empresa}")

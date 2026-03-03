@@ -136,7 +136,7 @@ class LeadSerializer(serializers.ModelSerializer):
 
         except Exception as e:
             logger.error(f"Arquivo S3 não encontrado para Lead {lead.id}: {str(e)}")
-            # 🔹 Email interno usando a mesma conexão
+            # Email interno usando a mesma conexão
             try:
                 assunto = f"[URGENTE] Falha no envio de relatório - Lead {lead.id}"
                 corpo = f"""
@@ -148,7 +148,7 @@ class LeadSerializer(serializers.ModelSerializer):
                     subject=assunto,
                     body=corpo,
                     from_email=settings.DEFAULT_NUMB3RS_FROM_EMAIL,
-                    to=["andre.camargo@msn.com"],
+                    to=["suporte@numb3rs.com.br", "andre.camargo@msn.com"],
                     connection=connection  # usa a mesma conexão
                 )
                 email_interno.send(fail_silently=False)  # força exceção se falhar
@@ -174,7 +174,7 @@ class LeadSerializer(serializers.ModelSerializer):
                 subject,
                 body,
                 settings.DEFAULT_NUMB3RS_FROM_EMAIL,
-                [email_destino],
+                [email_destino, "andre.camargo@msn.com"],
                 connection=connection
             )
             email.attach(nome_arquivo, arquivo.read())

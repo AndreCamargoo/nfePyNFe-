@@ -141,33 +141,27 @@ class LeadExportView(generics.GenericAPIView):
     Sem paginação e sem filtros.
     """
     queryset = Lead.objects.filter(deleted_at__isnull=True).order_by('-created_at')
-    # Removemos os filtros para garantir exportação total
     filter_backends = []
     permission_classes = [IsAuthenticated]
-    # Removemos a paginação
     pagination_class = None
 
     def get(self, request, *args, **kwargs):
-        # Pega o queryset base (todos não deletados)
         queryset = self.get_queryset()
-
-        # Não aplicamos filtros nem paginação propositalmente
         leads_to_export = queryset
 
-        # Configura a resposta como CSV
         response = HttpResponse(
             content_type='text/csv',
             headers={'Content-Disposition': 'attachment; filename="leads_full_export.csv"'},
         )
+        response.write('\ufeff')  # BOM para UTF-8 no Excel
 
-        # Configura o writer para usar ponto e vírgula (Excel PT-BR padrão)
         writer = csv.writer(response, delimiter=';')
 
-        # Cabeçalho
+        # Cabeçalho com TODOS os campos
         writer.writerow([
-            'Empresa', 'Cnes', 'Telefone', 'CNPJ', 'Cidade', 'Estado',
-            'Segmento', 'Classificação', 'Origem', 'Empresas do Grupo',
-            'Produtos', 'Contatos (JSON)'
+            'Empresa', 'Apelido', 'CNES', 'Telefone', 'CNPJ', 'Cidade', 'Estado',
+            'Segmento', 'Classificação', 'Origem', 'Código Natureza Jurídica',
+            'Natureza Jurídica', 'Empresas do Grupo', 'Produtos', 'Contatos (JSON)'
         ])
 
         # Linhas
@@ -177,15 +171,18 @@ class LeadExportView(generics.GenericAPIView):
 
             contatos_list = []
             for c in lead.contatos.all():
-                contatos_list.append({
+                contato_dict = {
                     "nome": c.nome,
                     "setor": c.setor,
                     "email": c.email,
+                    "email_extra": c.email_extra,
                     "celular": c.celular
-                })
+                }
+                contatos_list.append(contato_dict)
 
             writer.writerow([
                 lead.empresa,
+                lead.apelido or "",
                 lead.cnes or "",
                 lead.telefone or "",
                 lead.cnpj or "",
@@ -194,6 +191,8 @@ class LeadExportView(generics.GenericAPIView):
                 lead.segmento or "",
                 lead.classificacao or "",
                 lead.origem or "",
+                lead.cod_nat_jur or "",
+                lead.natureza_juridica or "",
                 grupos,
                 produtos,
                 json.dumps(contatos_list, ensure_ascii=False)
