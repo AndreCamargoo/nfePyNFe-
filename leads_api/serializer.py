@@ -111,48 +111,31 @@ class LeadSerializer(serializers.ModelSerializer):
         if not anexo_url:
             return
 
-        # Baixa o arquivo do S3
         response = requests.get(anexo_url)
         if response.status_code != 200:
             return
 
         arquivo = BytesIO(response.content)
 
-        # Conexão SMTP Numb3rs
         connection = get_connection(
-            backend=settings.EMAIL_NUMB3RS__BACKEND,
-            host=settings.EMAIL_NUMB3RS__HOST,
-            port=settings.EMAIL_NUMB3RS__PORT,
-            username=settings.EMAIL_NUMB3RS__HOST_USER,
-            password=settings.EMAIL__NUMB3RS_HOST_PASSWORD,
-            use_tls=settings.EMAIL_NUMB3RS__USE_TLS,
+            backend=settings.EMAIL_NUMB3RS_BACKEND,
+            host=settings.EMAIL_NUMB3RS_HOST,
+            port=settings.EMAIL_NUMB3RS_PORT,
+            username=settings.EMAIL_NUMB3RS_HOST_USER,
+            password=settings.EMAIL_NUMB3RS_HOST_PASSWORD,
+            use_tls=settings.EMAIL_NUMB3RS_USE_TLS,
         )
 
-        subject = "Relatório Analítico - Numb3rs Gov"
-
-        body = f"""
-            Olá {contato.nome}
-
-            Conforme solicitado, segue em anexo o relatório Numb3rs Gov, com dados analíticos de saúde voltados para a realidade do seu município.
-
-            Entendemos que informações corretas apoiem sua equipe na tomada de decisões de forma mais estratégica e baseadas em dados.
-
-            Em caso de dúvidas ou sugestões, conte com a gente.
-            E-mail suporte: suporte@numb3rs.com.br
-            Contato Comercial: (11) 98274-3176
-            Contato Suporte: (11) 94125-7849
-        """
-
         email = EmailMultiAlternatives(
-            subject,
-            body,
-            settings.DEFAULT__NUMB3RS_FROM_EMAIL,
+            "Relatório Analítico - Numb3rs Gov",
+            "Segue relatório em anexo.",
+            settings.DEFAULT_NUMB3RS_FROM_EMAIL,
             [contato.email],
             connection=connection
         )
 
         email.attach(nome_arquivo, arquivo.read())
-        email.send()
+        email.send(fail_silently=False)
 
     def update(self, instance, validated_data):
         contatos_data = validated_data.pop('contatos', None)
