@@ -2,10 +2,13 @@ from rest_framework import serializers
 from .models import Company, Product, Event, Lead, Contact, Cnes
 from django.contrib.auth.models import User
 
-from django.core.mail import EmailMultiAlternatives, get_connection
 from django.conf import settings
+from django.core.mail import EmailMultiAlternatives, get_connection, EmailMessage
 import requests
 from io import BytesIO
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -95,6 +98,7 @@ class LeadSerializer(serializers.ModelSerializer):
     def _enviar_email_lead(self, lead, origem_lp):
         contato = lead.contatos.first()
         if not contato:
+            logger.warning(f"Lead {lead.id} sem contato. Email não enviado.")
             return
 
         anexo_url = None
@@ -109,33 +113,53 @@ class LeadSerializer(serializers.ModelSerializer):
             nome_arquivo = f"relatorio_{lead.cidade}.pdf"
 
         if not anexo_url:
+            logger.warning(f"Lead {lead.id} sem anexo válido.")
             return
 
-        response = requests.get(anexo_url)
-        if response.status_code != 200:
-            return
+        try:
+            # 🔹 Timeout para não travar request
+            response = requests.get(anexo_url, timeout=10)
+            response.raise_for_status()
 
-        arquivo = BytesIO(response.content)
+            arquivo = BytesIO(response.content)
 
-        connection = get_connection(
-            backend=settings.EMAIL_NUMB3RS_BACKEND,
-            host=settings.EMAIL_NUMB3RS_HOST,
-            port=settings.EMAIL_NUMB3RS_PORT,
-            username=settings.EMAIL_NUMB3RS_HOST_USER,
-            password=settings.EMAIL_NUMB3RS_HOST_PASSWORD,
-            use_tls=settings.EMAIL_NUMB3RS_USE_TLS,
-        )
+            # 🔹 Conexão SMTP correta
+            connection = get_connection(
+                backend=settings.EMAIL_NUMB3RS_BACKEND,
+                host=settings.EMAIL_NUMB3RS_HOST,
+                port=settings.EMAIL_NUMB3RS_PORT,
+                username=settings.EMAIL_NUMB3RS_HOST_USER,
+                password=settings.EMAIL_NUMB3RS_HOST_PASSWORD,
+                use_tls=settings.EMAIL_NUMB3RS_USE_TLS,
+            )
 
-        email = EmailMultiAlternatives(
-            "Relatório Analítico - Numb3rs Gov",
-            "Segue relatório em anexo.",
-            settings.DEFAULT_NUMB3RS_FROM_EMAIL,
-            [contato.email],
-            connection=connection
-        )
+            subject = "Relatório Analítico - Numb3rs Gov"
 
-        email.attach(nome_arquivo, arquivo.read())
-        email.send(fail_silently=False)
+            body = f"""
+            Olá {contato.nome},
+
+            Conforme solicitado, segue em anexo o relatório Numb3rs Gov.
+
+            Em caso de dúvidas:
+            suporte@numb3rs.com.br
+            (11) 98274-3176
+            """
+
+            email = EmailMultiAlternatives(
+                subject,
+                body,
+                settings.DEFAULT_NUMB3RS_FROM_EMAIL,
+                [contato.email],
+                connection=connection
+            )
+
+            email.attach(nome_arquivo, arquivo.read())
+            email.send(fail_silently=False)
+
+            logger.info(f"Email enviado com sucesso para {contato.email} (Lead {lead.id})")
+
+        except Exception as e:
+            logger.error(f"Erro ao enviar email do Lead {lead.id}: {str(e)}")
 
     def update(self, instance, validated_data):
         contatos_data = validated_data.pop('contatos', None)
