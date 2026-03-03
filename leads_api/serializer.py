@@ -55,7 +55,6 @@ class LeadSerializer(serializers.ModelSerializer):
     empresas_grupo = serializers.PrimaryKeyRelatedField(many=True, queryset=Company.objects.all(), required=False)
     produtos_interesse = serializers.PrimaryKeyRelatedField(many=True, queryset=Product.objects.all(), required=False)
 
-    # Campos de auditoria como objetos completos (read_only)
     created_by = UserSerializer(read_only=True)
     updated_by = UserSerializer(read_only=True)
     deleted_by = UserSerializer(read_only=True)
@@ -67,47 +66,45 @@ class LeadSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         envio_email = validated_data.pop('envio_email', False)
         origem_lp = validated_data.pop('origem_lp', None)
-
         contatos_data = validated_data.pop('contatos', [])
         empresas_data = validated_data.pop('empresas_grupo', [])
         produtos_data = validated_data.pop('produtos_interesse', [])
 
-        # PEGA O USUÁRIO DO CONTEXTO
         request = self.context.get('request')
         user = request.user if request and hasattr(request, 'user') else None
 
-        # O created_by será definido automaticamente pelo AuditModel.save()
-        # mas vamos garantir que o validated_data tenha o contexto
         lead = Lead.objects.create(**validated_data)
 
         lead.empresas_grupo.set(empresas_data)
         lead.produtos_interesse.set(produtos_data)
 
+        # Cria contatos e guarda referência
+        contatos_objs = []
         for contato_data in contatos_data:
-            # PASSA O USUÁRIO PARA O CONTATO
             if user and user.is_authenticated:
                 contato_data['created_by'] = user
-            Contact.objects.create(lead=lead, **contato_data)
+            c = Contact.objects.create(lead=lead, **contato_data)
+            contatos_objs.append(c)
 
-        # DISPARO DE EMAIL
-        if envio_email and origem_lp:
-            self._enviar_email_lead(lead, origem_lp)
+        # Disparo de email
+        if envio_email and origem_lp and contatos_objs:
+            self._enviar_email_lead(lead, origem_lp, contato=contatos_objs[0])
 
         return lead
 
-    def _enviar_email_lead(self, lead, origem_lp):
-        contato = lead.contatos.first()
+    def _enviar_email_lead(self, lead, origem_lp, contato=None):
+        if contato is None:
+            contato = lead.contatos.first()
         if not contato:
             logger.warning(f"Lead {lead.id} sem contato. Email não enviado.")
             return
 
+        # Define URL e nome do arquivo
         anexo_url = None
         nome_arquivo = None
-
         if origem_lp == "saude" and lead.cnes:
             anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbsaude/home/atual/{lead.cnes}.png"
             nome_arquivo = f"relatorio_{lead.cnes}.png"
-
         elif origem_lp == "municipio" and lead.cidade:
             anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbgov/home/atual/{lead.cidade}.pdf"
             nome_arquivo = f"relatorio_{lead.cidade}.pdf"
@@ -117,13 +114,12 @@ class LeadSerializer(serializers.ModelSerializer):
             return
 
         try:
-            # 🔹 Timeout para não travar request
+            # Download do anexo com timeout
             response = requests.get(anexo_url, timeout=10)
             response.raise_for_status()
-
             arquivo = BytesIO(response.content)
 
-            # 🔹 Conexão SMTP correta
+            # Conexão SMTP
             connection = get_connection(
                 backend=settings.EMAIL_NUMB3RS_BACKEND,
                 host=settings.EMAIL_NUMB3RS_HOST,
@@ -134,7 +130,6 @@ class LeadSerializer(serializers.ModelSerializer):
             )
 
             subject = "Relatório Analítico - Numb3rs Gov"
-
             body = f"""
             Olá {contato.nome},
 
@@ -152,7 +147,6 @@ class LeadSerializer(serializers.ModelSerializer):
                 [contato.email],
                 connection=connection
             )
-
             email.attach(nome_arquivo, arquivo.read())
             email.send(fail_silently=False)
 
@@ -166,57 +160,41 @@ class LeadSerializer(serializers.ModelSerializer):
         empresas_data = validated_data.pop('empresas_grupo', None)
         produtos_data = validated_data.pop('produtos_interesse', None)
 
-        # PEGA O USUÁRIO ATUAL DO CONTEXTO DA REQUISIÇÃO
         request = self.context.get('request')
         user = request.user if request and hasattr(request, 'user') else None
 
-        # Atualiza campos simples do Lead
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # DEFINE O updated_by MANUALMENTE
         if user and user.is_authenticated:
             instance.updated_by = user
-
         instance.save()
 
-        # Atualiza ManyToMany (apenas se foram enviados)
         if empresas_data is not None:
             instance.empresas_grupo.set(empresas_data)
         if produtos_data is not None:
             instance.produtos_interesse.set(produtos_data)
 
-        # Atualiza Nested Contacts
         if contatos_data is not None:
             keep_ids = []
-
             for c_data in contatos_data:
                 if 'id' in c_data:
-                    c_id = c_data.get('id')
-                    if Contact.objects.filter(id=c_id, lead=instance).exists():
-                        c = Contact.objects.get(id=c_id)
-                        c.nome = c_data.get('nome', c.nome)
-                        c.setor = c_data.get('setor', c.setor)
-                        c.email = c_data.get('email', c.email)
-                        c.email_extra = c_data.get('email_extra', c.email_extra)
-                        c.celular = c_data.get('celular', c.celular)
-
-                        # DEFINE O updated_by PARA O CONTATO TAMBÉM
-                        if user and user.is_authenticated:
-                            c.updated_by = user
-
-                        c.save()
-                        keep_ids.append(c.id)
+                    c_id = c_data['id']
+                    c = Contact.objects.get(id=c_id, lead=instance)
+                    c.nome = c_data.get('nome', c.nome)
+                    c.setor = c_data.get('setor', c.setor)
+                    c.email = c_data.get('email', c.email)
+                    c.email_extra = c_data.get('email_extra', c.email_extra)
+                    c.celular = c_data.get('celular', c.celular)
+                    if user and user.is_authenticated:
+                        c.updated_by = user
+                    c.save()
+                    keep_ids.append(c.id)
                 else:
-                    # Sem ID = Novo Contato
-                    # PARA NOVOS CONTATOS, DEFINE created_by
                     if user and user.is_authenticated:
                         c_data['created_by'] = user
-
                     new_c = Contact.objects.create(lead=instance, **c_data)
                     keep_ids.append(new_c.id)
-
-            # Remove contatos que não vieram na lista
             instance.contatos.exclude(id__in=keep_ids).delete()
 
         return instance
