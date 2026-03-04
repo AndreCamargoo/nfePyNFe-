@@ -124,7 +124,7 @@ class LeadSerializer(serializers.ModelSerializer):
             nome_arquivo = f"relatorio_{lead.cnes}.png"
         elif origem_lp == "municipio" and lead.cidade:
             anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbgov/home/atual/{co_municip}.png"
-            nome_arquivo = f"relatorio_{co_municip}.pdf"
+            nome_arquivo = f"relatorio_{co_municip}.png"
 
         if not anexo_url:
             logger.warning(f"Lead {lead.id} sem anexo válido.")
