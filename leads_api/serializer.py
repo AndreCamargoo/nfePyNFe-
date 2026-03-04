@@ -123,7 +123,7 @@ class LeadSerializer(serializers.ModelSerializer):
             anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbsaude/home/atual/{lead.cnes}.png"
             nome_arquivo = f"relatorio_{lead.cnes}.png"
         elif origem_lp == "municipio" and lead.cidade:
-            anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbgov/home/atual/{co_municip}.pdf"
+            anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbgov/home/atual/{co_municip}.png"
             nome_arquivo = f"relatorio_{co_municip}.pdf"
 
         if not anexo_url:
