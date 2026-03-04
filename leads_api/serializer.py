@@ -50,6 +50,7 @@ class ContactSerializer(serializers.ModelSerializer):
 class LeadSerializer(serializers.ModelSerializer):
     envio_email = serializers.BooleanField(write_only=True, required=False)
     origem_lp = serializers.CharField(write_only=True, required=False)
+    co_municip = serializers.CharField(write_only=True, required=False)
 
     contatos = ContactSerializer(many=True, required=False)
     empresas_grupo = serializers.PrimaryKeyRelatedField(many=True, queryset=Company.objects.all(), required=False)
@@ -66,6 +67,7 @@ class LeadSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         envio_email = validated_data.pop('envio_email', False)
         origem_lp = validated_data.pop('origem_lp', None)
+        co_municip = validated_data.pop('co_municip', None)
 
         contatos_data = validated_data.pop('contatos', [])
         empresas_data = validated_data.pop('empresas_grupo', [])
@@ -88,19 +90,19 @@ class LeadSerializer(serializers.ModelSerializer):
                 contato_data['created_by'] = user
             Contact.objects.create(lead=lead, **contato_data)
 
-        # 🔹 Disparo de email apenas se marcado e origem_lp definido
+        # Disparo de email apenas se marcado e origem_lp definido
         if envio_email and origem_lp and contatos_data:
             # Pega apenas o primeiro contato
             primeiro_contato = contatos_data[0]
-            self._enviar_email_lead(lead, origem_lp, primeiro_contato)
+            self._enviar_email_lead(lead, origem_lp, primeiro_contato, co_municip)
 
         return lead
 
-    def _enviar_email_lead(self, lead, origem_lp, contato_data):
+    def _enviar_email_lead(self, lead, origem_lp, contato_data, co_municip=None):
         nome = contato_data.get('nome')
         email_destino = contato_data.get('email')
 
-        # 🔹 Cria a conexão SMTP apenas uma vez
+        # Cria a conexão SMTP apenas uma vez
         connection = get_connection(
             backend=settings.EMAIL_NUMB3RS_BACKEND,
             host=settings.EMAIL_NUMB3RS_HOST,
@@ -121,8 +123,8 @@ class LeadSerializer(serializers.ModelSerializer):
             anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbsaude/home/atual/{lead.cnes}.png"
             nome_arquivo = f"relatorio_{lead.cnes}.png"
         elif origem_lp == "municipio" and lead.cidade:
-            anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbgov/home/atual/{lead.cidade}.pdf"
-            nome_arquivo = f"relatorio_{lead.cidade}.pdf"
+            anexo_url = f"https://numb3rs-web.s3.us-east-1.amazonaws.com/dbgov/home/atual/{co_municip}.pdf"
+            nome_arquivo = f"relatorio_{co_municip}.pdf"
 
         if not anexo_url:
             logger.warning(f"Lead {lead.id} sem anexo válido.")
