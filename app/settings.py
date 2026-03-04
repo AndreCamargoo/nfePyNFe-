@@ -36,8 +36,6 @@ ALLOWED_HOSTS = [
     'api.allnube.com.br',
     'allnube.com.br',
     'www.allnube.com.br',
-    'agendagrupo.azevedo.cnt.br',
-    'www.agendagrupo.azevedo.cnt.br',
 ]
 
 CURRENT_URL = os.getenv('API_URL')
@@ -84,6 +82,9 @@ else:
 
         "https://dbresumof.numb3rs.com.br",
         "https://www.dbresumof.numb3rs.com.br",
+
+        'https://gov.numb3rs.com.br/',
+        'https://www.gov.numb3rs.com.br/',
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
@@ -101,6 +102,9 @@ else:
 
         "https://dbresumof.numb3rs.com.br",
         "https://www.dbresumof.numb3rs.com.br",
+
+        'https://gov.numb3rs.com.br/',
+        'https://www.gov.numb3rs.com.br/',
     ]
 
 # Cabeçalhos permitidos para CORS
