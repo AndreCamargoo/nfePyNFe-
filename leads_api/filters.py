@@ -1,6 +1,6 @@
 import django_filters
 from django.db.models import Q
-from .models import Lead, Cnes
+from .models import Lead, Cnes, Municipalities
 
 
 class LeadsFilter(django_filters.FilterSet):
@@ -82,6 +82,37 @@ class CnesFilter(django_filters.FilterSet):
             Q(razao_social__icontains=value) | Q(fantasia__icontains=value) |
             Q(cnes__icontains=value) | Q(cpf_cnpj__icontains=value) |
             Q(cidade__icontains=value)
+        )
+
+        return queryset.filter(filters)
+
+
+class MunicipalitiesFilter(django_filters.FilterSet):
+    # Busca geral
+    q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
+
+    # Filtros texto
+    co_municip = django_filters.CharFilter(field_name='co_municip', lookup_expr='icontains')
+    ds_nome = django_filters.CharFilter(field_name='ds_nome', lookup_expr='icontains')
+    ds_nomepad = django_filters.CharFilter(field_name='ds_nomepad', lookup_expr='icontains')
+    co_uf = django_filters.CharFilter(field_name='co_uf', lookup_expr='iexact')
+
+    class Meta:
+        model = Municipalities
+        fields = [
+            'co_municip',
+            'ds_nome',
+            'ds_nomepad',
+            'co_uf',
+        ]
+
+    def filter_by_q(self, queryset, name, value):
+        if not value:
+            return queryset
+
+        filters = (
+            Q(co_municip__icontains=value) | Q(ds_nome__icontains=value) |
+            Q(ds_nomepad__icontains=value) | Q(co_uf__icontains=value)
         )
 
         return queryset.filter(filters)

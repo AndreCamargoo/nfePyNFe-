@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, Product, Event, Lead, Contact, Cnes
+from .models import Company, Product, Event, Lead, Contact, Cnes, Municipalities
 from django.contrib.auth.models import User
 
 from django.conf import settings
@@ -242,3 +242,23 @@ class CnesSerializer(serializers.ModelSerializer):
 
 class CnesFileUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+    def validate_file(self, value):
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("O arquivo deve ser um CSV.")
+        return value
+
+
+class MunicipalitiesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Municipalities
+        fields = '__all__'
+
+
+class MunicipalitiesFileUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+    def validate_file(self, value):
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("O arquivo deve ser um CSV.")
+        return value

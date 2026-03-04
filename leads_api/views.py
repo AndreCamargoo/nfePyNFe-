@@ -10,19 +10,22 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from leads_api.models import Company, Product, Event, Lead, Cnes
+# Serializers, Models
+from leads_api.models import Company, Product, Event, Lead, Cnes, Municipalities
 from leads_api.serializer import (
     CompanySerializer, ProductSerializer, EventSerializer,
     LeadSerializer, FileUploadSerializer,
-    CnesFileUploadSerializer, CnesSerializer
+    CnesFileUploadSerializer, CnesSerializer,
+    MunicipalitiesSerializer, MunicipalitiesFileUploadSerializer
 )
 
 from .services.gemini import GeminiService
 from .services.duplication import DuplicationService
 
+# Filters
 from app.utils import utils
 from django_filters.rest_framework import DjangoFilterBackend
-from .filters import LeadsFilter, CnesFilter
+from .filters import LeadsFilter, CnesFilter, MunicipalitiesFilter
 
 from .services.import_service import ImportService
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -295,6 +298,14 @@ class CnesListView(generics.ListAPIView):
     serializer_class = CnesSerializer
     pagination_class = utils.CustomPageSizePagination
 
+    def paginate_queryset(self, queryset):
+        paginate = self.request.query_params.get("paginate", "true")
+
+        if paginate.lower() in ["false", "0", "no"]:
+            return None  # desativa paginação somente se pedir explicitamente
+
+        return super().paginate_queryset(queryset)
+
 
 class CnesImportView(APIView):
     permission_classes = [IsAuthenticated]
@@ -396,6 +407,100 @@ class CnesImportView(APIView):
                 # Inserir restante
                 if batch:
                     Cnes.objects.bulk_create(batch, batch_size=BATCH_SIZE)
+                    total_imported += len(batch)
+
+            return Response({
+                "status": "success",
+                "encoding_detected": encoding,
+                "imported": total_imported
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class MunicipalitiesView(generics.ListAPIView):
+    # permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = MunicipalitiesFilter
+    queryset = Municipalities.objects.all().order_by('id')
+    serializer_class = MunicipalitiesSerializer
+    pagination_class = utils.CustomPageSizePagination
+
+    def paginate_queryset(self, queryset):
+        paginate = self.request.query_params.get("paginate", "true")
+
+        if paginate.lower() in ["false", "0", "no"]:
+            return None  # desativa paginação somente se pedir explicitamente
+
+        return super().paginate_queryset(queryset)
+
+
+class MunicipalitiesImportView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, *args, **kwargs):
+        serializer = MunicipalitiesFileUploadSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        file = serializer.validated_data['file']
+
+        # Detectar encoding
+        raw_data = file.read()
+        result = chardet.detect(raw_data)
+        encoding = result.get("encoding") or "utf-8"
+
+        try:
+            decoded_file = raw_data.decode(encoding)
+        except UnicodeDecodeError:
+            decoded_file = raw_data.decode("latin1")
+
+        reader = csv.DictReader(decoded_file.splitlines(), delimiter=';')
+
+        batch = []
+        BATCH_SIZE = 5000
+        total_imported = 0
+
+        try:
+            with transaction.atomic():
+                for row in reader:
+
+                    if not any(row.values()):
+                        continue
+
+                    batch.append(
+                        Municipalities(
+                            co_municip=row.get('co_municip', '').replace('"', '').strip(),
+                            ds_nome=row.get('ds_nome', '').replace('"', '').strip(),
+                            ds_nomepad=row.get('ds_nomepad', '').replace('"', '').strip(),
+                            co_uf=row.get('co_uf', '').replace('"', '').strip(),
+                        )
+                    )
+
+                    if len(batch) >= BATCH_SIZE:
+                        Municipalities.objects.bulk_create(
+                            batch,
+                            batch_size=BATCH_SIZE,
+                            ignore_conflicts=True  # evita erro se já existir
+                        )
+                        total_imported += len(batch)
+                        batch = []
+
+                if batch:
+                    Municipalities.objects.bulk_create(
+                        batch,
+                        batch_size=BATCH_SIZE,
+                        ignore_conflicts=True
+                    )
                     total_imported += len(batch)
 
             return Response({

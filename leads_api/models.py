@@ -103,3 +103,16 @@ class Cnes(models.Model):
             models.Index(fields=['cnes']),
             models.Index(fields=['cpf_cnpj']),
         ]
+
+
+class Municipalities(models.Model):
+    co_municip = models.CharField(max_length=50, unique=True)
+    ds_nome = models.CharField(max_length=200)
+    ds_nomepad = models.CharField(max_length=200)
+    co_uf = models.CharField(max_length=2)
+
+    class Meta:
+        db_table = 'municipalities'
+
+    def __str__(self):
+        return f"{self.co_uf} - {self.ds_nome}"

@@ -5,7 +5,7 @@ from .views import (
     EventListCreateView, EventRetrieveUpdateDestroyView, EventGenerateEmailView,
     LeadListCreateView, LeadRetrieveUpdateDestroyView, LeadCheckDuplicityView, LeadGenerateStrategyView,
     LeadBulkDeleteView, LeadLastTimestampsView, LeadExportView, LeadImportView,
-    CnesListView, CnesImportView
+    CnesListView, CnesImportView, MunicipalitiesView, MunicipalitiesImportView
 )
 
 urlpatterns = [
@@ -37,4 +37,8 @@ urlpatterns = [
     # Cnes
     path('cnes/', CnesListView.as_view()),
     path('cnes/import/', CnesImportView.as_view()),
+
+    # Municipios
+    path('municipios/', MunicipalitiesView.as_view()),
+    path('municipios/import/', MunicipalitiesImportView.as_view()),
 ]
