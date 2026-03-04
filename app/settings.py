@@ -83,8 +83,8 @@ else:
         "https://dbresumof.numb3rs.com.br",
         "https://www.dbresumof.numb3rs.com.br",
 
-        'https://gov.numb3rs.com.br/',
-        'https://www.gov.numb3rs.com.br/',
+        'https://gov.numb3rs.com.br',
+        'https://www.gov.numb3rs.com.br',
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
@@ -97,14 +97,14 @@ else:
         'https://agendagrupo.azevedo.cnt.br',
         'https://www.agendagrupo.azevedo.cnt.br',
 
-        "https://leads.azv.tec.br/",
-        "https://www.leads.azv.tec.br/",
+        "https://leads.azv.tec.br",
+        "https://www.leads.azv.tec.br",
 
         "https://dbresumof.numb3rs.com.br",
         "https://www.dbresumof.numb3rs.com.br",
 
-        'https://gov.numb3rs.com.br/',
-        'https://www.gov.numb3rs.com.br/',
+        'https://gov.numb3rs.com.br',
+        'https://www.gov.numb3rs.com.br',
     ]
 
 # Cabeçalhos permitidos para CORS
