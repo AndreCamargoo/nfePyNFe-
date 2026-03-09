@@ -129,6 +129,7 @@ class ImportService:
                 # - Empresas do Grupo (mantém do CSV)
                 # - Produtos (mantém do CSV)
                 # - Contatos (mantém do CSV)
+                # - Observações (mantém do CSV)  # NOVO CAMPO
 
                 return row, True
             else:
@@ -311,6 +312,10 @@ class ImportService:
         # Natureza Jurídica
         if row.get('Natureza Jurídica'):
             lead.natureza_juridica = row['Natureza Jurídica'].upper()
+        
+        # NOVO CAMPO: Observações
+        if row.get('Observações'):
+            lead.observacoes = row['Observações'].strip()
         
         # Campos que só vêm do CSV
         if row.get('Segmento'):

@@ -160,11 +160,12 @@ class LeadExportView(generics.GenericAPIView):
 
         writer = csv.writer(response, delimiter=';')
 
-        # Cabeçalho com TODOS os campos
+        # Cabeçalho com TODOS os campos (incluindo observacoes)
         writer.writerow([
             'Empresa', 'Apelido', 'CNES', 'Telefone', 'CNPJ', 'Cidade', 'Estado',
             'Segmento', 'Classificação', 'Origem', 'Código Natureza Jurídica',
-            'Natureza Jurídica', 'Empresas do Grupo', 'Produtos', 'Contatos (JSON)'
+            'Natureza Jurídica', 'Empresas do Grupo', 'Produtos', 'Contatos (JSON)',
+            'Observações'
         ])
 
         # Linhas
@@ -198,7 +199,8 @@ class LeadExportView(generics.GenericAPIView):
                 lead.natureza_juridica or "",
                 grupos,
                 produtos,
-                json.dumps(contatos_list, ensure_ascii=False)
+                json.dumps(contatos_list, ensure_ascii=False),
+                lead.observacoes or ""
             ])
 
         return response

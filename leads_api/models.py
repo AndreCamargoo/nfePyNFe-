@@ -57,6 +57,7 @@ class Lead(AuditModel):
     apelido = models.CharField(max_length=255, null=True, blank=True)
     cod_nat_jur = models.CharField(max_length=20, null=True, blank=True)
     natureza_juridica = models.CharField(max_length=150, null=True, blank=True)
+    observacoes = models.TextField(null=True, blank=True, help_text="Observações gerais sobre o lead")
 
     def __str__(self):
         return self.empresa
