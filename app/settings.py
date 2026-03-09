@@ -85,6 +85,9 @@ else:
 
         'https://gov.numb3rs.com.br',
         'https://www.gov.numb3rs.com.br',
+
+        'https://moneyupgestao.com.br',
+        'https://www.moneyupgestao.com.br',
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
@@ -105,6 +108,9 @@ else:
 
         'https://gov.numb3rs.com.br',
         'https://www.gov.numb3rs.com.br',
+
+        'https://moneyupgestao.com.br',
+        'https://www.moneyupgestao.com.br',
     ]
 
 # Cabeçalhos permitidos para CORS
