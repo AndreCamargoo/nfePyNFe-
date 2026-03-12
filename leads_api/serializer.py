@@ -150,7 +150,7 @@ class LeadSerializer(serializers.ModelSerializer):
                     subject=assunto,
                     body=corpo,
                     from_email=settings.DEFAULT_NUMB3RS_FROM_EMAIL,
-                    to=["suporte@numb3rs.com.br", "andre.camargo@msn.com"],
+                    to=["suporte@numb3rs.com.br", "andre.camargo@msn.com", "jaddus.manga@numb3rs.com.br"],
                     connection=connection  # usa a mesma conexão
                 )
                 email_interno.send(fail_silently=False)  # força exceção se falhar
@@ -176,7 +176,7 @@ class LeadSerializer(serializers.ModelSerializer):
                 subject,
                 body,
                 settings.DEFAULT_NUMB3RS_FROM_EMAIL,
-                [email_destino, "andre.camargo@msn.com"],
+                [email_destino, "andre.camargo@msn.com", "jaddus.manga@numb3rs.com.br"],
                 connection=connection
             )
             email.attach(nome_arquivo, arquivo.read())
