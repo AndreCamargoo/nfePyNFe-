@@ -141,16 +141,19 @@ class LeadRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 class LeadExportView(generics.GenericAPIView):
     """
     Exportação COMPLETA (Dump) de todos os leads ativos.
-    Sem paginação e sem filtros.
+    Utiliza prefetch_related para otimizar as consultas de ManyToMany e Reverse FK.
     """
-    queryset = Lead.objects.filter(deleted_at__isnull=True).order_by('-created_at')
+    # Otimizamos a query com prefetch_related para 'empresas_grupo', 'produtos_interesse' e 'contatos'
+    queryset = Lead.objects.filter(deleted_at__isnull=True)\
+        .prefetch_related('empresas_grupo', 'produtos_interesse', 'contatos')\
+        .order_by('-created_at')
+    
     filter_backends = []
     permission_classes = [IsAuthenticated]
     pagination_class = None
 
     def get(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        leads_to_export = queryset
+        leads_to_export = self.get_queryset()
 
         response = HttpResponse(
             content_type='text/csv',
@@ -160,47 +163,50 @@ class LeadExportView(generics.GenericAPIView):
 
         writer = csv.writer(response, delimiter=';')
 
-        # Cabeçalho com TODOS os campos (incluindo observacoes)
+        # Cabeçalho baseado estritamente no model Lead
         writer.writerow([
-            'Empresa', 'Apelido', 'CNES', 'Telefone', 'CNPJ', 'Cidade', 'Estado',
-            'Segmento', 'Classificação', 'Origem', 'Código Natureza Jurídica',
-            'Natureza Jurídica', 'Empresas do Grupo', 'Produtos', 'Contatos (JSON)',
-            'Observações'
+            'Empresa', 'Apelido', 'CNPJ', 'CNES', 'Telefone', 'Cidade', 'Estado',
+            'Segmento', 'Classificação', 'Origem', 'Cod. Nat. Jurídica',
+            'Natureza Jurídica', 'Empresas do Grupo', 'Produtos Interesse', 
+            'Contatos (JSON)', 'Observações', 'Criado em', 'Atualizado em'
         ])
 
-        # Linhas
         for lead in leads_to_export:
-            grupos = ", ".join([company.nome for company in lead.empresas_grupo.all()])
-            produtos = ", ".join([prod.nome for prod in lead.produtos_interesse.all()])
+            # Extração de nomes das relações ManyToMany
+            grupos = ", ".join([g.nome for g in lead.empresas_grupo.all()])
+            produtos = ", ".join([p.nome for p in lead.produtos_interesse.all()])
 
-            contatos_list = []
-            for c in lead.contatos.all():
-                contato_dict = {
+            # Montagem da lista de contatos (RelatedName definido no model de Contatos costuma ser 'contatos')
+            contatos_list = [
+                {
                     "nome": c.nome,
                     "setor": c.setor,
                     "email": c.email,
                     "email_extra": c.email_extra,
                     "celular": c.celular
                 }
-                contatos_list.append(contato_dict)
+                for c in lead.contatos.all()
+            ]
 
             writer.writerow([
                 lead.empresa,
                 lead.apelido or "",
+                lead.cnpj or "",
                 lead.cnes or "",
                 lead.telefone or "",
-                lead.cnpj or "",
                 lead.cidade or "",
                 lead.estado or "",
                 lead.segmento or "",
-                lead.classificacao or "",
+                lead.classificacao or "Não Cliente",
                 lead.origem or "",
                 lead.cod_nat_jur or "",
                 lead.natureza_juridica or "",
                 grupos,
                 produtos,
                 json.dumps(contatos_list, ensure_ascii=False),
-                lead.observacoes or ""
+                lead.observacoes or "",
+                lead.created_at.strftime('%d/%m/%Y %H:%M') if lead.created_at else "",
+                lead.updated_at.strftime('%d/%m/%Y %H:%M') if lead.updated_at else ""
             ])
 
         return response
