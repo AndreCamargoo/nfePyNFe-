@@ -23,12 +23,27 @@ class ImportService:
             file.seek(0)
             decoded_file = file.read().decode('latin-1')
 
+        # Remove BOM se existir
+        if decoded_file.startswith('\ufeff'):
+            decoded_file = decoded_file[1:]
+
+        # Remove também o ï»¿ que pode aparecer
+        if decoded_file.startswith('ï»¿'):
+            decoded_file = decoded_file[3:]
+
         io_string = io.StringIO(decoded_file)
         first_line = io_string.readline()
         io_string.seek(0)
+
+        # Detecta delimitador
         delimiter = ';' if ';' in first_line else ','
 
+        # Lê o CSV
         reader = csv.DictReader(io_string, delimiter=delimiter)
+
+        # Verifica se os cabeçalhos foram lidos corretamente
+        if not reader.fieldnames:
+            raise Exception("Arquivo CSV vazio ou formato inválido")
 
         results = {
             "created": 0,
@@ -41,15 +56,23 @@ class ImportService:
         with transaction.atomic():
             for index, row in enumerate(reader, start=2):
                 try:
-                    # Limpa os cabeçalhos (remove BOM e espaços)
+                    # Cria um novo dicionário com chaves limpas
                     clean_row = {}
-                    for k, v in row.items():
-                        if not k:
+                    for old_key, value in row.items():
+                        if not old_key:
                             continue
-                        clean_key = k.strip().replace('\ufeff', '').strip()
-                        clean_row[clean_key] = v.strip() if v else ""
+                        # Limpa a chave (remove BOM, espaços, e caracteres estranhos)
+                        clean_key = old_key.strip().replace('\ufeff', '').replace('ï»¿', '').strip()
+                        # Limpa o valor
+                        clean_value = value.strip() if value else ""
+                        clean_row[clean_key] = clean_value
+
+                    # Pula linhas de comentário (começam com #)
+                    if clean_row.get('Empresa', '').startswith('#'):
+                        continue
 
                     if not clean_row.get('Empresa'):
+                        results['errors'].append(f"Linha {index}: Empresa não informada")
                         continue
 
                     ImportService._process_row(clean_row, results, duplicate)
@@ -64,7 +87,7 @@ class ImportService:
     def _enriquecer_com_cnes(row):
         """
         Busca dados na tabela CNES e enriquece a linha com os dados encontrados
-        AGORA: Sobrescreve os campos com os dados do CNES (prioridade CNES)
+        Sobrescreve os campos com os dados do CNES (prioridade CNES)
         """
         cnes_valor = row.get('CNES', '').strip()
         if not cnes_valor:
@@ -88,48 +111,31 @@ class ImportService:
                     cnes_record = Cnes.objects.filter(cnes__icontains=cnes_sem_zeros).first()
 
             if cnes_record:
-                logger.info(f"CNES {cnes_limpo} encontrado! SOBRESCREVENDO dados do CSV...")
+                logger.info(f"CNES {cnes_limpo} encontrado! Sobrescrevendo dados do CSV...")
 
-                # SOBRESCREVE todos os campos com os dados do CNES
-                # Empresa: usa razão social ou fantasia (SEMPRE sobrescreve)
+                # Sobrescreve todos os campos com os dados do CNES
                 if cnes_record.razao_social or cnes_record.fantasia:
                     row['Empresa'] = cnes_record.razao_social or cnes_record.fantasia
 
-                # Apelido: NÃO sobrescreve (conforme sua solicitação anterior)
-                # Mantém o apelido do CSV se existir
+                # Apelido NÃO é sobrescrito (mantém do CSV)
 
-                # Código Natureza Jurídica (SEMPRE sobrescreve)
                 if cnes_record.cod_nat_jur:
                     row['Código Natureza Jurídica'] = cnes_record.cod_nat_jur
 
-                # Natureza Jurídica (SEMPRE sobrescreve)
                 if cnes_record.natureza_juridica:
                     row['Natureza Jurídica'] = cnes_record.natureza_juridica
 
-                # CNPJ (SEMPRE sobrescreve)
                 if cnes_record.cpf_cnpj:
                     row['CNPJ'] = cnes_record.cpf_cnpj
 
-                # Telefone (SEMPRE sobrescreve)
                 if cnes_record.telefone:
                     row['Telefone'] = cnes_record.telefone
 
-                # Cidade (SEMPRE sobrescreve)
                 if cnes_record.cidade:
                     row['Cidade'] = cnes_record.cidade.upper()
 
-                # Estado (SEMPRE sobrescreve)
                 if cnes_record.uf:
                     row['Estado'] = cnes_record.uf.upper()
-
-                # Os campos abaixo NÃO são sobrescritos pelo CNES:
-                # - Segmento (mantém do CSV)
-                # - Classificação (mantém do CSV)
-                # - Origem (mantém do CSV)
-                # - Empresas do Grupo (mantém do CSV)
-                # - Produtos (mantém do CSV)
-                # - Contatos (mantém do CSV)
-                # - Observações (mantém do CSV)  # NOVO CAMPO
 
                 return row, True
             else:
@@ -141,38 +147,120 @@ class ImportService:
             return row, False
 
     @staticmethod
+    def _parse_friendly_contacts(contact_str):
+        """
+        Parseia formato amigável de contatos:
+        - Contatos separados por " || " (pipe duplo)
+        - Campos separados por " | " (pipe)
+        - Formato: campo: valor
+
+        Exemplos:
+        "nome: JOAO SILVA | setor: COMERCIAL | email: joao@teste.com | celular: 11999999999"
+        "nome: JOAO | email: joao@teste.com || nome: MARIA | email: maria@teste.com"
+        """
+        if not contact_str or contact_str.strip() == '':
+            return []
+
+        contacts = []
+
+        # Remove aspas externas que podem vir do CSV
+        contact_str = contact_str.strip()
+        if contact_str.startswith('"') and contact_str.endswith('"'):
+            contact_str = contact_str[1:-1]
+
+        # PASSO 1: Separa múltiplos contatos por "||"
+        contact_items = re.split(r'\|\|', contact_str)
+
+        for item in contact_items:
+            item = item.strip()
+            if not item:
+                continue
+
+            contact = {}
+
+            # PASSO 2: Separa os campos por "|"
+            fields = re.split(r'\|', item)
+
+            for field in fields:
+                field = field.strip()
+                if ':' not in field:
+                    continue
+
+                # Divide campo e valor (apenas no primeiro :)
+                key, value = field.split(':', 1)
+                key = key.strip().lower()
+                value = value.strip()
+
+                if not value:
+                    continue
+
+                # Mapeia para os campos do contato
+                if key in ['nome', 'name', 'nome_completo', 'nome_contato']:
+                    contact['nome'] = value.upper()
+                elif key in ['setor', 'cargo', 'department', 'departamento', 'area']:
+                    contact['setor'] = value.upper()
+                elif key in ['email', 'e-mail', 'mail', 'email_principal']:
+                    contact['email'] = value.lower()
+                elif key in ['email_extra', 'email2', 'email_secundario', 'email_alternativo', 'email_sec']:
+                    contact['email_extra'] = value.lower()
+                elif key in ['celular', 'telefone', 'phone', 'whatsapp', 'tel', 'contato', 'cel']:
+                    # Limpa telefone (remove tudo que não é número)
+                    contact['celular'] = re.sub(r'\D', '', value)
+
+            # Só adiciona se tiver pelo menos nome
+            if contact.get('nome'):
+                contacts.append(contact)
+            elif contact.get('email'):
+                # Se não tem nome mas tem email, cria nome a partir do email
+                contact['nome'] = contact['email'].split('@')[0].upper()
+                contacts.append(contact)
+
+        return contacts
+
+    @staticmethod
     def _parse_contacts_json(json_str):
         """
-        Parseia JSON de contatos de forma inteligente, lidando com vários formatos
+        Parseia contatos aceitando múltiplos formatos:
+        1. Formato amigável: "nome: JOAO | email: joao@teste.com || nome: MARIA"
+        2. JSON padrão: [{"nome":"JOAO"}]
+        3. JSON com escape: "[{\"nome\":\"JOAO\"}]"
+        4. CSV com aspas duplicadas: "[{""nome"":""JOAO""}]"
         """
         if not json_str or json_str == '[]':
             return []
 
-        # Remove aspas externas se houver
         original = json_str
+
+        # TENTATIVA 1: Formato amigável (com : e | ou ||)
+        if ':' in json_str and ('|' in json_str or '||' in json_str):
+            logger.info("Detected friendly format with colons and pipes")
+            contacts = ImportService._parse_friendly_contacts(json_str)
+            if contacts:
+                logger.info(f"Parsed {len(contacts)} contacts using friendly format")
+                return contacts
+
+        # TENTATIVA 2: Formato amigável com apenas um contato
+        if ':' in json_str and any(key in json_str.lower() for key in ['nome:', 'email:', 'setor:', 'celular:']):
+            logger.info("Detected single contact friendly format")
+            contacts = ImportService._parse_friendly_contacts(json_str)
+            if contacts:
+                return contacts
+
+        # Remove aspas externas se houver
         if json_str.startswith('"') and json_str.endswith('"'):
             json_str = json_str[1:-1]
 
-        # Corrige escapes comuns
+        # Limpa aspas duplicadas malformadas
+        json_str = json_str.replace('""', '"')
         json_str = json_str.replace('\\"', '"')
 
-        # Tenta diferentes estratégias de parsing
+        # TENTATIVA 3: JSON normal
         strategies = [
-            # Estratégia 1: JSON normal
             lambda s: json.loads(s),
-            
-            # Estratégia 2: Python literal (mais flexível)
             lambda s: ast.literal_eval(s),
-            
-            # Estratégia 3: Corrige chaves sem aspas
             lambda s: json.loads(re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', s)),
-            
-            # Estratégia 4: Remove aspas simples e tenta novamente
             lambda s: json.loads(s.replace("'", '"')),
-            
-            # Estratégia 5: Combina estratégias 3 e 4
-            lambda s: json.loads(re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', 
-                                         r'\1"\2":', s.replace("'", '"'))),
+            lambda s: json.loads(re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', s.replace("'", '"'))),
         ]
 
         for i, strategy in enumerate(strategies):
@@ -181,11 +269,13 @@ class ImportService:
                 if isinstance(result, list):
                     logger.info(f"JSON parsed successfully with strategy {i+1}")
                     return result
+                elif isinstance(result, dict):
+                    return [result]
             except Exception as e:
                 logger.debug(f"Strategy {i+1} failed: {str(e)}")
                 continue
 
-        # Se todas as estratégias falharem, tenta extrair manualmente
+        # TENTATIVA 4: Extração manual (fallback)
         logger.warning(f"All parsing strategies failed for: {original[:100]}")
         return ImportService._manual_extract_contacts(json_str)
 
@@ -196,34 +286,41 @@ class ImportService:
         """
         contacts = []
 
-        # Divide por chaves de objetos
+        # Remove aspas duplicadas primeiro
+        text = text.replace('""', '"')
+
+        # Encontra padrões de objetos entre chaves
         objects = re.findall(r'\{([^}]+)\}', text)
-        
+
         for obj in objects:
             contact = {}
-            
+
             # Extrai nome
-            nome_match = re.search(r'nome["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            nome_match = re.search(r'n["\']*\s*:\s*["\']+([^"\'{},]+)["\']+', obj, re.IGNORECASE)
             if nome_match:
                 contact['nome'] = nome_match.group(1).strip()
-            
+            else:
+                nome_match = re.search(r'n["\']*\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+                if nome_match:
+                    contact['nome'] = nome_match.group(1).strip()
+
             # Extrai email
-            email_match = re.search(r'email["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            email_match = re.search(r'email["\']*\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
             if email_match:
                 contact['email'] = email_match.group(1).strip()
-            
+
             # Extrai email_extra
-            email_extra_match = re.search(r'email_extra["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            email_extra_match = re.search(r'email_extra["\']*\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
             if email_extra_match:
                 contact['email_extra'] = email_extra_match.group(1).strip()
-            
+
             # Extrai celular
-            celular_match = re.search(r'celular["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            celular_match = re.search(r'celular["\']*\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
             if celular_match:
                 contact['celular'] = celular_match.group(1).strip()
-            
+
             # Extrai setor
-            setor_match = re.search(r'setor["\']?\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
+            setor_match = re.search(r'setor["\']*\s*:\s*["\']?([^"\'{},]+)["\']?', obj, re.IGNORECASE)
             if setor_match:
                 contact['setor'] = setor_match.group(1).strip()
 
@@ -237,17 +334,17 @@ class ImportService:
         """
         Processa uma linha do CSV e cria/atualiza um lead
         """
-        # PRIMEIRO: Enriquece com dados do CNES se houver
+        # Enriquece com dados do CNES se houver
         row_enriquecida, cnes_encontrado = ImportService._enriquecer_com_cnes(row)
-        
+
         if cnes_encontrado:
             results['cnes_encontrados'] += 1
         elif row.get('CNES'):
             results['cnes_nao_encontrados'] += 1
-        
+
         # Usa a linha enriquecida para o resto do processamento
         row = row_enriquecida
-        
+
         empresa_nome = row.get('Empresa', '').upper()
         if not empresa_nome:
             return
@@ -275,53 +372,44 @@ class ImportService:
         if lead.deleted_at:
             lead.deleted_at = None
 
-        # Atualiza campos do Lead (prioriza dados do CSV, depois CNES)
+        # Atualiza campos do Lead
         lead.empresa = empresa_nome
-        
-        # Apelido - NÃO vem do CNES, só do CSV
+
         if row.get('Apelido'):
             lead.apelido = row['Apelido'].upper()
-        
-        # CNES - PRESERVAR ZEROS À ESQUERDA (é string)
+
         if row.get('CNES'):
-            lead.cnes = row['CNES'].strip()  # Não converte para número, mantém como string
+            lead.cnes = row['CNES'].strip()
         elif not lead.cnes and cnes_encontrado:
-            # Se não tinha CNES e encontramos via enriquecimento
             lead.cnes = row.get('CNES', '').strip()
-        
-        # Telefone
+
         if row.get('Telefone'):
             lead.telefone = row['Telefone'].strip()
-        
-        # CNPJ
+
         if row.get('CNPJ'):
             lead.cnpj = row['CNPJ'].strip()
-        
-        # Cidade
+
         if row.get('Cidade'):
             lead.cidade = row['Cidade'].upper()
-        
-        # Estado
+
         if row.get('Estado'):
             lead.estado = row['Estado'].upper()
-        
-        # Código Natureza Jurídica
+
         if row.get('Código Natureza Jurídica'):
             lead.cod_nat_jur = row['Código Natureza Jurídica'].strip()
-        
-        # Natureza Jurídica
+
         if row.get('Natureza Jurídica'):
             lead.natureza_juridica = row['Natureza Jurídica'].upper()
-        
-        # NOVO CAMPO: Observações
+
         if row.get('Observações'):
             lead.observacoes = row['Observações'].strip()
-        
-        # Campos que só vêm do CSV
+
         if row.get('Segmento'):
             lead.segmento = row['Segmento'].upper()
+
         if row.get('Classificação'):
             lead.classificacao = row['Classificação']
+
         if row.get('Origem'):
             lead.origem = row['Origem']
 
@@ -344,14 +432,14 @@ class ImportService:
                 product, _ = Product.objects.get_or_create(nome=nome)
                 lead.produtos_interesse.add(product)
 
-        # Processa Contatos (JSON)
-        contatos_json = row.get('Contatos (JSON)', '')
+        # Processa Contatos - Suporta tanto "Contatos" quanto "Contatos (JSON)"
+        contatos_json = row.get('Contatos', '') or row.get('Contatos (JSON)', '')
+
         if contatos_json and contatos_json != '[]':
             contacts_data = ImportService._parse_contacts_json(contatos_json)
-            
+
             if contacts_data:
                 for c_data in contacts_data:
-                    # Garante que todos os campos existam
                     contact_data = {
                         'nome': c_data.get('nome', '').upper().strip(),
                         'setor': c_data.get('setor', '').upper().strip(),
@@ -359,11 +447,11 @@ class ImportService:
                         'email_extra': c_data.get('email_extra', '').lower().strip(),
                         'celular': c_data.get('celular', '').strip()
                     }
-                    
-                    if contact_data['nome']:  # Só cria se tiver nome
+
+                    if contact_data['nome']:
                         ImportService._create_or_update_contact(lead, contact_data)
             else:
-                results['errors'].append(f"Não foi possível parsear contatos para {empresa_nome}: {contatos_json[:100]}")
+                results['errors'].append(f"Linha {empresa_nome}: Não foi possível parsear contatos: {contatos_json[:100]}")
 
         if is_new:
             results['created'] += 1
@@ -388,7 +476,6 @@ class ImportService:
         contact = Contact.objects.filter(lead=lead, nome__iexact=nome).first()
 
         if contact:
-            # Atualiza apenas se os novos valores não estiverem vazios
             if email:
                 contact.email = email
             if email_extra:
@@ -400,7 +487,6 @@ class ImportService:
             contact.save()
             logger.info(f"Contato atualizado: {nome} para lead {lead.empresa}")
         else:
-            # Cria novo contato
             Contact.objects.create(
                 lead=lead,
                 nome=nome,
