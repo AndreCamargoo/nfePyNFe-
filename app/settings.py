@@ -181,6 +181,9 @@ INSTALLED_APPS = [
 
     # Leads
     'leads_api',
+
+    # Celery
+    'django_celery_results',
 ]
 
 MIDDLEWARE = [
