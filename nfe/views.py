@@ -3394,8 +3394,27 @@ class NFeAutomatizacaoStatusView(APIView):
         # Iniciar Celery Worker (processa as tasks)
         celery -A app worker --loglevel=info --pool=threads --concurrency=4
 
+    Executar o Celery Worker em BACKGROUND:
+
+        # Execute em background com --detach
+        celery -A app worker --loglevel=info --pool=threads --detach --logfile=logs/celery_worker.log --pidfile=celery_worker.pid
+
+        # Verificar se o worker está rodando
+        celery -A app status
+
+        # Ver logs
+        tail -f logs/celery_worker.log
+
+
         # Iniciar Celery Beat (dispara as tasks agendadas)
         celery -A app beat --loglevel=info
+
+    Executar o Celery Beat BACKGROUND:
+        # Em um novo terminal (ou em background)
+        celery -A app beat --loglevel=info --detach --logfile=logs/celery_beat.log --pidfile=celery_beat.pid
+
+        # Verificar se o Beat está rodando
+        ps aux | grep celery
 
         # Iniciar ambos em um único comando (útil para desenvolvimento)
         celery -A app worker --beat --loglevel=info --pool=threads
@@ -3411,6 +3430,62 @@ class NFeAutomatizacaoStatusView(APIView):
 
         # Limpar fila (se necessário)
         celery -A app purge -f
+
+
+    Comandos .sh:
+
+        # Ver status do worker
+        celery -A app status
+
+        # Ver tasks registradas
+        celery -A app inspect registered
+
+        # Ver tasks em execução
+        celery -A app inspect active
+
+        # Ver tasks agendadas
+        celery -A app inspect scheduled
+
+        # Testar task de debug
+        celery -A app call app.celery.debug_task
+
+        # Executar automação NFe manualmente
+        celery -A app call nfe.tasks.automatizar_nfe
+
+        # Limpar fila (se necessário)
+        celery -A app purge -f
+
+        # Parar todos os processos celery
+        pkill -f celery
+
+    Comandos diretos do Celery .sh
+
+        # Ver status dos serviços
+        ./status_all.sh
+
+        # Ver logs interativamente
+        ./logs_all.sh
+
+        # Reiniciar todos os serviços
+        ./restart_all.sh
+
+        # Parar todos os serviços
+        ./stop_all.sh
+
+        # Iniciar todos os serviços
+        ./start_all.sh
+
+    Monitoramento:
+
+        # Ver logs do worker em tempo real
+        tail -f logs/celery_worker.log
+
+        # Ver logs do beat em tempo real
+        tail -f logs/celery_beat.log
+
+        # Ver ambos os logs
+        tail -f logs/celery_worker.log logs/celery_beat.log
+
     """
     permission_classes = [IsAuthenticated]
 
