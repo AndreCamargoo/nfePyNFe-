@@ -1,0 +1,17 @@
+================================================================================
+RELATÓRIO DE LINHAS NÃO IMPORTADAS
+Data: 02/04/2026 14:22:36
+================================================================================
+
+Linha 1474: Nome da conta ou CNPJ não preenchido
+Dados: {'Origem': '', 'Email Secundário': '', 'É Cliente?': '', 'Conta: Telefone': '', 'CNPJ': '', 'CNES': '', 'Primeiro Nome': 'Gesner', 'Sobrenome': 'Penteado', 'Cargo': '', 'Nome da conta': '', 'Rua de correspondência': '', 'Cidade de correspondência': '', 'Estado/Província de correspondência': '', 'CEP de correspondência': '', 'Telefone': '', 'Fax': '', 'Celular': '', 'Email': 'administrativo@hospitalidf.com.br'}
+--------------------------------------------------------------------------------
+
+Linha 1937: Nome da conta ou CNPJ não preenchido
+Dados: {'Origem': 'Total', 'Email Secundário': '', 'É Cliente?': '89', 'Conta: Telefone': '', 'CNPJ': '', 'CNES': '1126479492', 'Primeiro Nome': '', 'Sobrenome': '', 'Cargo': '', 'Nome da conta': '', 'Rua de correspondência': '', 'Cidade de correspondência': '', 'Estado/Província de correspondência': '', 'CEP de correspondência': '', 'Telefone': '', 'Fax': '', 'Celular': '', 'Email': ''}
+--------------------------------------------------------------------------------
+
+Linha 1939: Nome da conta ou CNPJ não preenchido
+Dados: {'Origem': '', 'Email Secundário': '1637', 'É Cliente?': '', 'Conta: Telefone': '', 'CNPJ': '', 'CNES': '', 'Primeiro Nome': '', 'Sobrenome': '', 'Cargo': '', 'Nome da conta': '', 'Rua de correspondência': '', 'Cidade de correspondência': '', 'Estado/Província de correspondência': '', 'CEP de correspondência': '', 'Telefone': '', 'Fax': '', 'Celular': '', 'Email': ''}
+--------------------------------------------------------------------------------
+

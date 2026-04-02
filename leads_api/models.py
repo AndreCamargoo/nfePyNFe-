@@ -34,29 +34,27 @@ class Event(models.Model):
 
 class Lead(AuditModel):
     """Refere-se a 'LEADS'"""
-    empresa = models.CharField(max_length=255)
-    cnpj = models.CharField(max_length=20, blank=True, null=True)
-    cnes = models.CharField(max_length=20, blank=True, null=True)
-    telefone = models.CharField(max_length=20, blank=True, null=True)
-    cidade = models.CharField(max_length=100, blank=True, null=True)
+    empresa = models.CharField(max_length=500)  # AUMENTADO para 500
+    cnpj = models.CharField(max_length=50, blank=True, null=True)  # AUMENTADO para 50
+    cnes = models.CharField(max_length=50, blank=True, null=True)  # AUMENTADO para 50
+    telefone = models.CharField(max_length=100, blank=True, null=True)  # AUMENTADO para 100
+    cidade = models.CharField(max_length=200, blank=True, null=True)  # AUMENTADO para 200
     estado = models.CharField(max_length=2, blank=True, null=True)
-    segmento = models.CharField(max_length=100, blank=True, null=True)
+    segmento = models.CharField(max_length=200, blank=True, null=True)  # AUMENTADO para 200
     classificacao = models.CharField(max_length=50, default='Não Cliente')
-    origem = models.CharField(max_length=100, blank=True, null=True)
+    origem = models.CharField(max_length=200, blank=True, null=True)  # AUMENTADO para 200
 
-    # ManyToMany usando string references ou IDs.
-    # Para simplificar a compatibilidade com o frontend que enviava nomes,
-    # vamos usar ManyToMany real aqui.
+    # ManyToMany
     empresas_grupo = models.ManyToManyField(Company, blank=True, related_name='leads')
     produtos_interesse = models.ManyToManyField(Product, blank=True, related_name='interested_leads')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # NOVOS CAMPOS (apenas esses, sem duplicar created_at/updated_at)
-    apelido = models.CharField(max_length=255, null=True, blank=True)
-    cod_nat_jur = models.CharField(max_length=20, null=True, blank=True)
-    natureza_juridica = models.CharField(max_length=150, null=True, blank=True)
+    # NOVOS CAMPOS
+    apelido = models.CharField(max_length=500, null=True, blank=True)  # AUMENTADO
+    cod_nat_jur = models.CharField(max_length=50, null=True, blank=True)  # AUMENTADO
+    natureza_juridica = models.CharField(max_length=500, null=True, blank=True)  # AUMENTADO
     observacoes = models.TextField(null=True, blank=True, help_text="Observações gerais sobre o lead")
 
     def __str__(self):
@@ -66,11 +64,12 @@ class Lead(AuditModel):
 class Contact(AuditModel):
     """Refere-se a 'contatos' dentro de LEADS"""
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='contatos')
-    nome = models.CharField(max_length=255)
-    setor = models.CharField(max_length=100, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
-    celular = models.CharField(max_length=20, blank=True, null=True)
-    email_extra = models.EmailField(blank=True, null=True)
+    nome = models.CharField(max_length=500)  # AUMENTADO
+    setor = models.CharField(max_length=300, blank=True, null=True)  # AUMENTADO
+    email = models.EmailField(blank=True, null=True, max_length=500)  # AUMENTADO
+    celular = models.CharField(max_length=100, blank=True, null=True)  # AUMENTADO
+    telefone_contato = models.CharField(max_length=100, blank=True, null=True)  # AUMENTADO
+    email_extra = models.EmailField(blank=True, null=True, max_length=500)  # AUMENTADO
 
     def __str__(self):
         return f"{self.nome} - {self.lead.empresa}"

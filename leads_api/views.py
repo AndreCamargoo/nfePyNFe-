@@ -1,9 +1,11 @@
 import csv
 import json
 import chardet
+import os
 
 from django.http import HttpResponse
 from django.utils import timezone
+from django.http import FileResponse, Http404
 
 from rest_framework import generics, status
 from rest_framework.views import APIView
@@ -32,6 +34,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+
+from celery.result import AsyncResult
+from celery import current_app
+from django.core.cache import cache
 
 
 class CompanyListCreateView(generics.ListCreateAPIView):
@@ -147,7 +153,7 @@ class LeadExportView(generics.GenericAPIView):
     queryset = Lead.objects.filter(deleted_at__isnull=True)\
         .prefetch_related('empresas_grupo', 'produtos_interesse', 'contatos')\
         .order_by('-created_at')
-    
+
     filter_backends = []
     permission_classes = [IsAuthenticated]
     pagination_class = None
@@ -279,18 +285,349 @@ class LeadLastTimestampsView(APIView):
         })
 
 
-class LeadImportView(APIView):
+class LeadImportStatusView(APIView):
+    """
+    Consulta status de uma task de importação
+    """
     permission_classes = [IsAuthenticated]
-    # Permite upload de arquivos
-    parser_classes = (MultiPartParser, FormParser)
+
+    def get(self, request, task_id):
+        task = AsyncResult(task_id)
+
+        result = {
+            "task_id": task_id,
+            "status": task.status,
+            "ready": task.ready(),
+            "successful": task.successful() if task.ready() else None,
+            "failed": task.failed() if task.ready() else None,
+        }
+
+        if task.ready():
+            if task.successful():
+                result["result"] = task.result
+            else:
+                result["error"] = str(task.info)
+        else:
+            # Se não estiver pronto, tenta pegar do cache
+            cached_result = cache.get(f'import_result_{task_id}')
+            if cached_result:
+                result["partial_result"] = cached_result
+
+        return Response(result)
+
+
+class LeadImportCancelView(APIView):
+    """
+    Cancela uma task de importação em andamento
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, task_id):
+        try:
+            task = AsyncResult(task_id)
+
+            # Verifica se a task ainda está pendente ou em progresso
+            if task.state in ['PENDING', 'STARTED', 'RETRY']:
+                # Revoga a task
+                current_app.control.revoke(task_id, terminate=True, signal='SIGKILL')
+
+                # Aguarda um momento para o worker processar o cancelamento
+                import time
+                time.sleep(0.5)
+
+                # Remove do cache
+                cache.delete(f'import_result_{task_id}')
+                cache.delete(f'import_task_created_{task_id}')
+
+                # Remove da lista de tasks do usuário
+                user_task_key = f'user_import_tasks_{request.user.id}'
+                task_ids = cache.get(user_task_key, [])
+                if task_id in task_ids:
+                    task_ids.remove(task_id)
+                    cache.set(user_task_key, task_ids, timeout=86400)
+
+                return Response({
+                    "message": f"Task {task_id} cancelada com sucesso",
+                    "task_id": task_id,
+                    "previous_state": task.state
+                })
+            else:
+                return Response({
+                    "message": f"Task {task_id} não pode ser cancelada (estado: {task.state})",
+                    "task_id": task_id,
+                    "state": task.state
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response(
+                {"error": f"Erro ao cancelar task: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class LeadImportTasksView(APIView):
+    """
+    Lista tasks de importação do usuário atual
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Pega os parâmetros de filtro
+        status_filter = request.query_params.get('status', None)
+        limit = int(request.query_params.get('limit', 50))
+        offset = int(request.query_params.get('offset', 0))
+
+        # Pega as tasks do cache (implementar conforme necessidade)
+        # Aqui você pode armazenar os task_ids em uma lista no cache do usuário
+        user_task_key = f'user_import_tasks_{request.user.id}'
+        task_ids = cache.get(user_task_key, [])
+
+        # Limita e pagina
+        task_ids = task_ids[offset:offset + limit]
+
+        tasks = []
+        for task_id in task_ids:
+            task = AsyncResult(task_id)
+            tasks.append({
+                "task_id": task_id,
+                "status": task.status,
+                "ready": task.ready(),
+                "created_at": cache.get(f'import_task_created_{task_id}')
+            })
+
+        # Filtra por status se necessário
+        if status_filter:
+            tasks = [t for t in tasks if t['status'] == status_filter]
+
+        return Response({
+            "tasks": tasks,
+            "total": len(task_ids),
+            "limit": limit,
+            "offset": offset
+        })
+
+
+class LeadImportDownloadReportView(APIView):
+    """
+    Download do relatório de erros gerado durante a importação
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        report_path = request.data.get('report_path')
+
+        if not report_path:
+            return Response(
+                {"error": "report_path é obrigatório"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Garante que o caminho está dentro do diretório reports (segurança)
+        if '..' in report_path or not report_path.startswith('reports/'):
+            return Response(
+                {"error": "Caminho de arquivo inválido"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verifica se o arquivo existe
+        if not os.path.exists(report_path):
+            return Response(
+                {"error": f"Relatório não encontrado: {report_path}"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            # Abre o arquivo para download
+            file_handle = open(report_path, 'rb')
+            response = FileResponse(
+                file_handle,
+                content_type='text/plain; charset=utf-8',
+                as_attachment=True,
+                filename=os.path.basename(report_path)
+            )
+            # Adiciona cabeçalhos para garantir o download
+            response['Content-Disposition'] = f'attachment; filename="{os.path.basename(report_path)}"'
+            response['Content-Type'] = 'text/plain; charset=utf-8'
+            return response
+        except Exception as e:
+            return Response(
+                {"error": f"Erro ao baixar relatório: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LeadImportCleanupView(APIView):
+    """
+    Limpa tasks antigas e arquivos de relatório
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        # Limpa tasks do usuário
+        user_task_key = f'user_import_tasks_{request.user.id}'
+        old_tasks = cache.get(user_task_key, [])
+
+        cleaned_tasks = []
+        for task_id in old_tasks:
+            task = AsyncResult(task_id)
+            # Mantém apenas tasks recentes (últimas 24h) que ainda estão ativas
+            created_at = cache.get(f'import_task_created_{task_id}')
+            if created_at:
+                from datetime import datetime
+                created_time = datetime.fromisoformat(created_at)
+                if (datetime.now() - created_time).days < 1 and task.state in ['PENDING', 'PROGRESS']:
+                    cleaned_tasks.append(task_id)
+
+        cache.set(user_task_key, cleaned_tasks, timeout=86400)
+
+        # Opcional: Limpar arquivos de relatório antigos
+        import os
+        import glob
+        from datetime import datetime, timedelta
+
+        reports_dir = 'reports/'
+        if os.path.exists(reports_dir):
+            for filepath in glob.glob(os.path.join(reports_dir, '*.txt')):
+                # Remove arquivos com mais de 7 dias
+                if os.path.getctime(filepath) < (datetime.now() - timedelta(days=7)).timestamp():
+                    try:
+                        os.remove(filepath)
+                    except:
+                        pass
+
+        return Response({
+            "message": "Limpeza concluída",
+            "tasks_removed": len(old_tasks) - len(cleaned_tasks),
+            "remaining_tasks": len(cleaned_tasks)
+        })
+
+
+class LeadImportView(APIView):
+    """
+    ### Comandos Básicos:
+
+        # Iniciar Celery Worker (Windows)
+        celery -A app worker --loglevel=info --pool=solo
+        celery -A app worker --loglevel=info --pool=threads
+
+        # Iniciar Celery Worker (Linux/Mac)
+        celery -A app worker --loglevel=info
+
+        # Iniciar com mais workers
+        celery -A app worker --loglevel=info --concurrency=4
+
+        # Iniciar Celery Beat (para tarefas agendadas)
+        celery -A app beat --loglevel=info
+
+        # Iniciar Flower (monitoramento) - precisa instalar: pip install flower
+        celery -A app flower --port=5555
+        # Acessar: http://localhost:5555
+
+    ### Comandos de Status e Inspeção:
+
+        # Ver status do worker
+        celery -A app status
+
+        # Ver workers ativos
+        celery -A app inspect active
+
+        # Ver tasks registradas
+        celery -A app inspect registered
+
+        # Ver estatísticas
+        celery -A app inspect stats
+
+        # Ver tarefas em andamento
+        celery -A app inspect active
+
+        # Ver tarefas agendadas
+        celery -A app inspect scheduled
+
+        # Ver tarefas reservadas
+        celery -A app inspect reserved
+
+    ### Comandos de Controle:
+
+        # Parar worker (graceful)
+        celery -A app control shutdown
+
+        # Limpar todas as tasks (purge)
+        celery -A app purge
+
+        # Revogar uma task específica
+        celery -A app control revoke <task_id>
+
+        # Revogar e terminar (force)
+        celery -A app control revoke <task_id> --terminate
+
+        # Revogar todas as tasks em uma fila
+        celery -A app control revoke --all
+
+        # Pausar um worker
+        celery -A app control pause
+
+        # Retomar um worker
+        celery -A app control resume
+
+        # Rate limit
+        celery -A app control rate_limit tasks.add 10/s
+
+    ### Comandos de Debug:
+
+        # Rodar task de debug
+        celery -A app call leads_api.tasks.import_leads_csv_task --args='["file_content", "test.xlsx", false, "xlsx"]'
+
+        # Ver logs detalhados
+        celery -A app worker --loglevel=debug
+
+        # Ver logs em arquivo
+        celery -A app worker --loglevel=info --logfile=celery.log
+
+        # Com saída colorida (Linux/Mac)
+        celery -A app worker --loglevel=info --color
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        GET para documentação (opcional)
+        """
+        return Response({
+            "message": "Use POST para enviar arquivo CSV",
+            "required_fields": ["Nome da conta", "CNPJ"],
+            "optional_fields": ["CNES", "Primeiro Nome", "Sobrenome", "Email", "Celular"],
+            "example": "POST /api/v1/leads/import/?celery=true"
+        })
 
     def post(self, request, *args, **kwargs):
         serializer = FileUploadSerializer(data=request.data)
         if serializer.is_valid():
             file = serializer.validated_data['file']
+
+            # Verifica se deve usar Celery (pode vir do query param)
+            use_celery = request.query_params.get('celery', 'true').lower() == 'true'
+
+            # Opção para forçar processamento síncrono (útil para testes)
+            force_sync = request.query_params.get('sync', 'false').lower() == 'true'
+            if force_sync:
+                use_celery = False
+
             try:
-                # Chama o serviço para processar o arquivo
-                result = ImportService.process_csv(file, False)
+                result = ImportService.process_csv(file, False, celery=use_celery)
+
+                # Se usou Celery, registra o task_id para o usuário
+                if use_celery and 'task_id' in result:
+                    user_task_key = f'user_import_tasks_{request.user.id}'
+                    task_ids = cache.get(user_task_key, [])
+                    task_ids.insert(0, result['task_id'])  # Adiciona no início
+                    # Mantém apenas os últimos 100 tasks
+                    task_ids = task_ids[:100]
+                    cache.set(user_task_key, task_ids, timeout=86400)  # 24 horas
+
+                    # Salva timestamp de criação
+                    from datetime import datetime
+                    cache.set(f'import_task_created_{result["task_id"]}', datetime.now().isoformat(), timeout=86400)
+
                 return Response(result, status=status.HTTP_200_OK)
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -50,6 +50,10 @@ from db_allnube_empresa.serializer import (
     NfeFlatSerializer, NfeFlatModelSerializer, ProdutoFlatModelSerializer
 )
 
+from celery.result import AsyncResult
+from django.core.cache import cache
+from nfe.tasks import automatizar_nfe_task
+from rest_framework.response import Response
 
 class NFeBaseView:
     """Classe base com configurações comuns"""
@@ -3253,9 +3257,9 @@ class NfeFornecedorRetrieveAPIView(generics.RetrieveAPIView):
         )
 
 
-###################################################
-### Compoem display especificos da home allnube ###
-###################################################
+# ##################################################
+# ## Compoem display especificos da home allnube ###
+# ##################################################
 class NfeFaturamentoAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
@@ -3370,3 +3374,84 @@ class NfeProdutosAPIView(APIView):
         serializer = NfeProdutosOutputSerializer(data_list, many=True)
 
         return response.Response(serializer.data)
+
+
+# ##################################################
+# ####### MONITORAR TAREFAS AGENDADAS ##############
+# ##################################################
+@extend_schema_view(
+    get=extend_schema(
+        exclude=True
+    ),
+    post=extend_schema(
+        exclude=True
+    )
+)
+class NFeAutomatizacaoStatusView(APIView):
+    """
+    Comandos para gerenciar o Celery Beat:
+
+        # Iniciar Celery Worker (processa as tasks)
+        celery -A app worker --loglevel=info --pool=threads --concurrency=4
+
+        # Iniciar Celery Beat (dispara as tasks agendadas)
+        celery -A app beat --loglevel=info
+
+        # Iniciar ambos em um único comando (útil para desenvolvimento)
+        celery -A app worker --beat --loglevel=info --pool=threads
+
+        # Verificar tasks agendadas
+        celery -A app inspect scheduled
+
+        # Verificar tasks registradas
+        celery -A app inspect registered
+
+        # Parar o Beat
+        celery -A app control shutdown
+
+        # Limpar fila (se necessário)
+        celery -A app purge -f
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Tenta pegar a última task do cache
+        last_task_id = cache.get('last_automatizacao_nfe_task_id')
+
+        if last_task_id:
+            task = AsyncResult(last_task_id)
+            return Response({
+                "task_id": last_task_id,
+                "status": task.status,
+                "ready": task.ready(),
+                "result": task.result if task.ready() else None,
+            })
+
+        return Response({"message": "Nenhuma task encontrada"})
+
+
+@extend_schema_view(
+    get=extend_schema(
+        exclude=True
+    ),
+    post=extend_schema(
+        exclude=True
+    )
+)
+class NFeAutomatizacaoTriggerView(APIView):
+    """
+    Endpoint para disparar a automação manualmente
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        task = automatizar_nfe_task.delay()
+
+        # Salva o task_id no cache
+        cache.set('last_automatizacao_nfe_task_id', task.id, timeout=86400)
+
+        return Response({
+            "task_id": task.id,
+            "status": "processing",
+            "message": "Automação iniciada"
+        })

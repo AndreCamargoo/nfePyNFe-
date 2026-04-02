@@ -4,8 +4,10 @@ from .views import (
     ProductListCreateView, ProductRetrieveUpdateDestroyView,
     EventListCreateView, EventRetrieveUpdateDestroyView, EventGenerateEmailView,
     LeadListCreateView, LeadRetrieveUpdateDestroyView, LeadCheckDuplicityView, LeadGenerateStrategyView,
-    LeadBulkDeleteView, LeadLastTimestampsView, LeadExportView, LeadImportView,
-    CnesListView, CnesImportView, MunicipalitiesView, MunicipalitiesImportView
+    LeadBulkDeleteView, LeadLastTimestampsView, LeadExportView,
+    CnesListView, CnesImportView, MunicipalitiesView, MunicipalitiesImportView,
+    LeadImportView, LeadImportStatusView, LeadImportCancelView, LeadImportTasksView,
+    LeadImportDownloadReportView, LeadImportCleanupView
 )
 
 urlpatterns = [
@@ -25,7 +27,15 @@ urlpatterns = [
     # Lead
     path('leads/', LeadListCreateView.as_view()),
     path('leads/export/', LeadExportView.as_view()),
+
+    # Celery
     path('leads/import/', LeadImportView.as_view()),
+    path('leads/import/status/<str:task_id>/', LeadImportStatusView.as_view(), name='lead-import-status'),
+    path('leads/import/cancel/<str:task_id>/', LeadImportCancelView.as_view(), name='lead-import-cancel'),
+    path('leads/import/tasks/', LeadImportTasksView.as_view(), name='lead-import-tasks'),
+    path('leads/import/download-report/', LeadImportDownloadReportView.as_view(), name='lead-import-download'),
+    path('leads/import/cleanup/', LeadImportCleanupView.as_view(), name='lead-import-cleanup'),
+
     path('leads/<int:pk>/', LeadRetrieveUpdateDestroyView.as_view()),
     path('leads/check-duplicity/', LeadCheckDuplicityView.as_view()),
     path('leads/generate-strategy/', LeadGenerateStrategyView.as_view()),

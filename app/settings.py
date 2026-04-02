@@ -13,6 +13,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+from celery.schedules import crontab
+
 API_USERNAME = os.getenv('API_USERNAME')
 API_PASSWORD = os.getenv('API_PASSWORD')
 DOWNLOAD_AGENDA = os.getenv('DOWNLOAD_AGENDA')
@@ -377,3 +379,66 @@ AWS_BUCKET = os.getenv('AWS_BUCKET', '')
 
 # Storage padrão
 DEFAULT_FILE_STORAGE = 'app.storage_backends.conditional_storage'
+
+# ==================== CELERY CONFIGURATION ====================
+# Redis Configuration (via Docker)
+REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
+REDIS_DB = os.environ.get('REDIS_DB', '0')
+
+# Broker URLs - USANDO REDIS
+CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+
+# Serialization
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Timezone
+CELERY_TIMEZONE = TIME_ZONE
+
+# Task tracking
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CELERY_RESULT_EXPIRES = 3600  # 1 hour
+
+# Connection settings
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_RETRY = True
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 10
+
+# For development - set to False to use Redis, True for eager mode
+CELERY_TASK_ALWAYS_EAGER = False
+
+# Worker settings
+CELERY_WORKER_CONCURRENCY = 4
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
+
+# Logging
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False
+
+# Configuração do Celery Beat (tarefas agendadas)
+CELERY_BEAT_SCHEDULE = {
+    # Automação NFe - Executa de 00:00 até 07:00 a cada 30 minutos
+    'automatizar-nfe': {
+        'task': 'nfe.tasks.automatizar_nfe',
+        'schedule': crontab(hour='0-7', minute='*/30'),  # 00:00, 00:30, 01:00, ..., 07:00
+        'options': {
+            'expires': 1800,  # Expira após 30 minutos
+        }
+    },
+
+    # Executar também em horário comercial (se necessário)
+    # 'automatizar-nfe-comercial': {
+    #     'task': 'nfe.tasks.automatizar_nfe',
+    #     'schedule': crontab(hour='8-18', minute='*/60'),  # A cada hora
+    #     'options': {
+    #         'expires': 3600,
+    #     }
+    # },
+}
+
+# Lock timeout para evitar execução simultânea
+CELERY_TASK_SOFT_TIME_LIMIT = 60 * 25  # 25 minutos
+CELERY_TASK_TIME_LIMIT = 60 * 30  # 30 minutos

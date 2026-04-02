@@ -1,3 +1,5 @@
+import os
+
 from rest_framework import serializers
 from .models import Company, Product, Event, Lead, Contact, Cnes, Municipalities
 from django.contrib.auth.models import User
@@ -234,6 +236,22 @@ class LeadSerializer(serializers.ModelSerializer):
 
 class FileUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+    def validate_file(self, value):
+        # Aceita CSV, XLSX e XLS
+        allowed_extensions = ['.csv', '.xlsx', '.xls']
+        ext = os.path.splitext(value.name)[1].lower()
+
+        if ext not in allowed_extensions:
+            raise serializers.ValidationError(
+                f"Formato não suportado. Use: {', '.join(allowed_extensions)}"
+            )
+
+        # Limite de 100MB
+        if value.size > 100 * 1024 * 1024:
+            raise serializers.ValidationError("Arquivo muito grande. Máximo 100MB")
+
+        return value
 
 
 class CnesSerializer(serializers.ModelSerializer):
