@@ -11,10 +11,19 @@ class LeadsFilter(django_filters.FilterSet):
     empresa = django_filters.CharFilter(field_name='empresa', lookup_expr='icontains')
     apelido = django_filters.CharFilter(field_name='apelido', lookup_expr='icontains')
     cnpj = django_filters.CharFilter(field_name='cnpj', lookup_expr='icontains')
-    cidade = django_filters.CharFilter(field_name='cidade', lookup_expr='icontains')
-    estado = django_filters.CharFilter(field_name='estado', lookup_expr='iexact')
+    cidade = django_filters.CharFilter(
+        field_name='cidade',
+        lookup_expr='iexact'  # 'iexact' = case-insensitive exact match
+    )
+    estado = django_filters.CharFilter(
+        field_name='estado',
+        lookup_expr='iexact'  # 'iexact' = case-insensitive exact match
+    )
     segmento = django_filters.CharFilter(field_name='segmento', lookup_expr='icontains')
-    classificacao = django_filters.CharFilter(field_name='classificacao', lookup_expr='icontains')
+    classificacao = django_filters.CharFilter(
+        field_name='classificacao',
+        lookup_expr='iexact'  # 'iexact' = case-insensitive exact match
+    )
     origem = django_filters.CharFilter(field_name='origem', lookup_expr='icontains')
 
     # Filtros para relacionamentos (IDs)
