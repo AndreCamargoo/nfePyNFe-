@@ -45,6 +45,16 @@ class CompanyListCreateView(generics.ListCreateAPIView):
     serializer_class = CompanySerializer
     permission_classes = [IsAuthenticated]
 
+    pagination_class = utils.CustomPageSizePagination
+
+    def paginate_queryset(self, queryset):
+        paginate = self.request.query_params.get("paginate", "true")
+
+        if paginate.lower() in ["false", "0", "no"]:
+            return None  # desativa paginação somente se pedir explicitamente
+
+        return super().paginate_queryset(queryset)
+
 
 class CompanyRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Company.objects.all()
