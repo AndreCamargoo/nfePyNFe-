@@ -49,3 +49,6 @@ Thumbs.db
 # Outras pastas locais que podem ser ignoradas
 *.bak
 *.swp
+
+# Reports
+reports/

@@ -3434,6 +3434,26 @@ class NFeAutomatizacaoStatusView(APIView):
 
     Comandos .sh:
 
+        # Dar permissão de execução
+        chmod +x *.sh
+
+        # Ver status dos serviços
+        ./status_all.sh
+
+        # Ver logs interativamente
+        ./logs_all.sh
+
+        # Reiniciar todos os serviços
+        ./restart_all.sh
+
+        # Parar todos os serviços
+        ./stop_all.sh
+
+        # Iniciar todos os serviços
+        ./start_all.sh
+
+    Comandos diretos do Celery .sh
+
         # Ver status do worker
         celery -A app status
 
@@ -3457,23 +3477,6 @@ class NFeAutomatizacaoStatusView(APIView):
 
         # Parar todos os processos celery
         pkill -f celery
-
-    Comandos diretos do Celery .sh
-
-        # Ver status dos serviços
-        ./status_all.sh
-
-        # Ver logs interativamente
-        ./logs_all.sh
-
-        # Reiniciar todos os serviços
-        ./restart_all.sh
-
-        # Parar todos os serviços
-        ./stop_all.sh
-
-        # Iniciar todos os serviços
-        ./start_all.sh
 
     Monitoramento:
 

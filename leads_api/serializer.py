@@ -9,6 +9,8 @@ from django.core.mail import EmailMultiAlternatives, get_connection, EmailMessag
 import requests
 from io import BytesIO
 
+import re
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -66,7 +68,29 @@ class LeadSerializer(serializers.ModelSerializer):
         model = Lead
         fields = '__all__'
 
+    def _normalize_data(self, data):
+        """
+        Padroniza os dados:
+        - Tudo que é texto vira minúsculo.
+        - Campos de telefone e documento perdem a formatação (somente números).
+        """
+        # Lista de campos que devem conter apenas números
+        numeric_fields = ['cnpj', 'telefone', 'celular', 'telefone_contato']
+
+        for key, value in list(data.items()):
+            if isinstance(value, str):
+                if key in numeric_fields:
+                    # Remove tudo que NÃO for número (0-9)
+                    data[key] = re.sub(r'[^0-9]', '', value)
+                else:
+                    # Converte para minúsculo e tira espaços sobrando nas pontas
+                    data[key] = value.strip().lower()
+        return data
+
     def create(self, validated_data):
+        # 1. Padroniza os dados do Lead antes de processar
+        validated_data = self._normalize_data(validated_data)
+
         envio_email = validated_data.pop('envio_email', False)
         origem_lp = validated_data.pop('origem_lp', None)
         co_municip = validated_data.pop('co_municip', None)
@@ -88,6 +112,9 @@ class LeadSerializer(serializers.ModelSerializer):
 
         # Cria contatos
         for contato_data in contatos_data:
+            # 2. Padroniza os dados de cada Contato
+            contato_data = self._normalize_data(contato_data)
+
             if user and user.is_authenticated:
                 contato_data['created_by'] = user
             Contact.objects.create(lead=lead, **contato_data)
@@ -101,10 +128,10 @@ class LeadSerializer(serializers.ModelSerializer):
         return lead
 
     def _enviar_email_lead(self, lead, origem_lp, contato_data, co_municip=None):
+        # Lógica de email inalterada
         nome = contato_data.get('nome')
         email_destino = contato_data.get('email')
 
-        # Cria a conexão SMTP apenas uma vez
         connection = get_connection(
             backend=settings.EMAIL_NUMB3RS_BACKEND,
             host=settings.EMAIL_NUMB3RS_HOST,
@@ -118,7 +145,6 @@ class LeadSerializer(serializers.ModelSerializer):
             logger.warning(f"Lead {lead.id} sem email. Email não enviado.")
             return
 
-        # Define URL e nome do arquivo
         anexo_url = None
         nome_arquivo = None
         if origem_lp == "saude" and lead.cnes:
@@ -133,14 +159,12 @@ class LeadSerializer(serializers.ModelSerializer):
             return
 
         try:
-            # Tenta baixar o arquivo
             response = requests.get(anexo_url, timeout=10)
-            response.raise_for_status()  # dispara exceção se não 200
+            response.raise_for_status()
             arquivo = BytesIO(response.content)
 
         except Exception as e:
             logger.error(f"Arquivo S3 não encontrado para Lead {lead.id}: {str(e)}")
-            # Email interno usando a mesma conexão
             try:
                 assunto = f"[URGENTE] Falha no envio de relatório - Lead {lead.id}"
                 corpo = f"""
@@ -153,15 +177,14 @@ class LeadSerializer(serializers.ModelSerializer):
                     body=corpo,
                     from_email=settings.DEFAULT_NUMB3RS_FROM_EMAIL,
                     to=["suporte@numb3rs.com.br", "andre.camargo@msn.com", "jaddus.manga@numb3rs.com.br"],
-                    connection=connection  # usa a mesma conexão
+                    connection=connection
                 )
-                email_interno.send(fail_silently=False)  # força exceção se falhar
+                email_interno.send(fail_silently=False)
                 logger.info(f"Email interno de falha enviado para andre.camargo@msn.com (Lead {lead.id})")
             except Exception as e2:
                 logger.error(f"Erro ao enviar email interno de aviso de falha S3: {str(e2)}")
-            return  # cancela envio para o cliente
+            return
 
-        # Se chegou aqui, arquivo está ok, envia para o cliente
         try:
             subject = "Relatório Analítico - Numb3rs Gov"
             body = f"""
@@ -190,6 +213,9 @@ class LeadSerializer(serializers.ModelSerializer):
             logger.error(f"Erro ao enviar email do Lead {lead.id} para {email_destino}: {str(e)}")
 
     def update(self, instance, validated_data):
+        # 1. Padroniza os dados do Lead antes de atualizar
+        validated_data = self._normalize_data(validated_data)
+
         contatos_data = validated_data.pop('contatos', None)
         empresas_data = validated_data.pop('empresas_grupo', None)
         produtos_data = validated_data.pop('produtos_interesse', None)
@@ -212,6 +238,9 @@ class LeadSerializer(serializers.ModelSerializer):
         if contatos_data is not None:
             keep_ids = []
             for c_data in contatos_data:
+                # 2. Padroniza os dados de cada Contato
+                c_data = self._normalize_data(c_data)
+
                 if 'id' in c_data:
                     c_id = c_data['id']
                     c = Contact.objects.get(id=c_id, lead=instance)
@@ -220,6 +249,8 @@ class LeadSerializer(serializers.ModelSerializer):
                     c.email = c_data.get('email', c.email)
                     c.email_extra = c_data.get('email_extra', c.email_extra)
                     c.celular = c_data.get('celular', c.celular)
+                    c.telefone_contato = c_data.get('telefone_contato', c.telefone_contato)
+
                     if user and user.is_authenticated:
                         c.updated_by = user
                     c.save()
@@ -229,6 +260,7 @@ class LeadSerializer(serializers.ModelSerializer):
                         c_data['created_by'] = user
                     new_c = Contact.objects.create(lead=instance, **c_data)
                     keep_ids.append(new_c.id)
+
             instance.contatos.exclude(id__in=keep_ids).delete()
 
         return instance
