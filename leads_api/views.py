@@ -115,31 +115,13 @@ class EventGenerateEmailView(APIView):
 
 
 class LeadListCreateView(generics.ListCreateAPIView):
+    # Filtra apenas os NÃO deletados
     queryset = Lead.objects.filter(deleted_at__isnull=True).order_by('-created_at')
     serializer_class = LeadSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = LeadsFilter
+    # permission_classes = [IsAuthenticated]
     pagination_class = utils.CustomPageSizePagination
-
-    def get_filterset_kwargs(self):
-        """
-        Interfere nos argumentos do filtro para normalizar
-        os parâmetros da URL para minúsculo.
-        """
-        kwargs = super().get_filterset_kwargs()
-
-        if kwargs.get('data'):
-            # Cria uma cópia mutável dos parâmetros da URL
-            clean_data = kwargs['data'].copy()
-
-            for key, value in clean_data.items():
-                # Normaliza apenas campos de texto (evita mexer em IDs ou números)
-                if isinstance(value, str):
-                    clean_data[key] = value.lower()
-
-            kwargs['data'] = clean_data
-
-        return kwargs
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

@@ -34,18 +34,11 @@ class LeadsFilter(django_filters.FilterSet):
         if not value:
             return queryset
 
-        # Opcional: Forçar o valor de busca para minúsculo
-        search_value = value.lower()
-
         # Busca por: Nome Empresa OU CNPJ OU Cidade OU Nome de algum Contato
         filters = (
-            Q(empresa__icontains=search_value) | Q(apelido__icontains=search_value) |
-            Q(cnpj__icontains=search_value) | Q(cidade__icontains=search_value) |
-            Q(contatos__nome__icontains=search_value)
+            Q(empresa__icontains=value) | Q(apelido__icontains=value) | Q(cnpj__icontains=value) | Q(cidade__icontains=value) | Q(contatos__nome__icontains=value)
         )
-
-        # .distinct() é importante quando filtramos por
-        # relacionamentos (contatos) para evitar duplicatas
+        # .distinct() é importante quando filtramos por relacionamentos (contatos) para evitar duplicatas
         return queryset.filter(filters).distinct()
 
 
