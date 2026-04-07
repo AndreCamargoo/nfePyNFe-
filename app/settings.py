@@ -165,25 +165,33 @@ INSTALLED_APPS = [
     'drf_spectacular',
     # Apps
     'authentication',
+
+    # Allnube
     'nfe',
     'nfe_evento',
     'nfe_resumo',
-    'empresa',
     'apexcharts',
+
+    # Global
+    'empresa',
     'sistema',
 
+    # Cloud Azevedo
     'cloud.circularizacao',
     'cloud.segmento',
     'cloud.cliente',
 
-    # App para controlar migracoes de banco empresas
+    # App para controlar migracoes de banco empresas allnube
     'db_allnube_empresa',
 
     # Leads
     'leads_api',
 
-    # Celery
+    # Celery gerenciamento em background
     'django_celery_results',
+
+    # Desativados
+    'agendaGrupo.agenda',
 ]
 
 MIDDLEWARE = [
