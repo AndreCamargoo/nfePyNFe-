@@ -177,9 +177,6 @@ INSTALLED_APPS = [
     'sistema',
 
     # Cloud Azevedo
-    'cloud.circularizacao',
-    'cloud.segmento',
-    'cloud.cliente',
 
     # App para controlar migracoes de banco empresas allnube
     'db_allnube_empresa',
@@ -189,9 +186,6 @@ INSTALLED_APPS = [
 
     # Celery gerenciamento em background
     'django_celery_results',
-
-    # Desativados
-    'agendaGrupo.agenda',
 ]
 
 MIDDLEWARE = [
