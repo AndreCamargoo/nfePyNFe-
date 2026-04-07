@@ -14,8 +14,6 @@ from sistema.models import GrupoRotaSistema
 from sistema.models import EmpresaSistema, Sistema
 from sistema.serializer import GrupoRotaSistemaListSerializer
 
-from cloud.cliente.models import Cliente, StatusChoices, Segmento
-
 from django.db import transaction
 
 
@@ -54,7 +52,7 @@ class EmpresaBaseSerializer(serializers.ModelSerializer):
 class EmpresaCreateSerializer(EmpresaBaseSerializer):
     """Serializer específico para criação"""
 
-    # 🔥 Nome do campo diferente do nome do modelo para evitar conflitos
+    # Nome do campo diferente do nome do modelo para evitar conflitos
     usuario_especifico = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
         required=False,
@@ -139,7 +137,7 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
     def create(self, validated_data):
         request_user = self.context['request'].user
 
-        # 🔥 Pega o usuário específico do contexto (se foi enviado)
+        # Pega o usuário específico do contexto (se foi enviado)
         usuario_especifico = self.context.get('usuario_especifico')
 
         # Define o usuário final
@@ -164,7 +162,7 @@ class EmpresaUpdateSerializer(EmpresaBaseSerializer):
         }
 
     def update(self, instance, validated_data):
-        # 👇 Se o campo "sistema" vier explicitamente como None, ignora a alteração
+        # Se o campo "sistema" vier explicitamente como None, ignora a alteração
         if 'sistema' in validated_data and validated_data['sistema'] is None:
             validated_data.pop('sistema')  # removido
 
@@ -173,8 +171,6 @@ class EmpresaUpdateSerializer(EmpresaBaseSerializer):
 
 class EmpresaListSerializer(EmpresaBaseSerializer):
     """Serializer para listagem (pode incluir campos calculados ou relacionados)"""
-    # Exemplo: se quiser adicionar campos calculados futuramente
-    # nome_matriz = serializers.CharField(source='matriz_filial.razao_social', read_only=True)
     pass
 
 
@@ -228,7 +224,7 @@ class ConexaoBancoModelSerializer(serializers.ModelSerializer):
         if not empresa:
             raise ValidationError('Empresa não encontrada no contexto.')
 
-        # 🔐 Verifica se empresa tem permissão para criar banco
+        # Verifica se empresa tem permissão para criar banco
         tem_permissao = EmpresaSistema.objects.filter(
             empresa=empresa,
             ativo=True,
@@ -538,7 +534,6 @@ class EmpresaAdminDetailSerializer(serializers.ModelSerializer):
 
     usuario = serializers.SerializerMethodField()
     funcionarios = serializers.SerializerMethodField()
-    segmentos = serializers.SerializerMethodField()
 
     class Meta:
         model = Empresa
@@ -552,7 +547,6 @@ class EmpresaAdminDetailSerializer(serializers.ModelSerializer):
             'usuario',
             'categoria',
             'sistema',
-            'segmentos',
             'funcionarios',
             'matriz_filial'
         ]
@@ -589,24 +583,6 @@ class EmpresaAdminDetailSerializer(serializers.ModelSerializer):
                 'status': f.status
             }
             for f in obj.funcionarios_empresa.select_related('user').all()
-        ]
-
-    def get_segmentos(self, obj):
-        """
-        Segmentos associados ao cliente, se existir.
-        Nem toda empresa possui cliente.
-        """
-        cliente = Cliente.objects.filter(empresa=obj).prefetch_related('segmentos').first()
-
-        if not cliente:
-            return []
-
-        return [
-            {
-                'id': segmento.id,
-                'nome': segmento.nome
-            }
-            for segmento in cliente.segmentos.all()
         ]
 
 
@@ -654,10 +630,6 @@ class CriacaoEmpresaFuncionarioSerializer(serializers.Serializer):
         queryset=Sistema.objects.all(),
         required=False,
         allow_null=True
-    )
-    segmentos = serializers.ListField(
-        child=serializers.IntegerField(),
-        required=False
     )
     status = serializers.IntegerField(required=False)
     matriz_filial = serializers.IntegerField(required=False, allow_null=True)
@@ -735,18 +707,6 @@ class CriacaoEmpresaFuncionarioSerializer(serializers.Serializer):
             })
 
         # ==========================
-        # VALIDAÇÃO DE SEGMENTOS
-        # ==========================
-        segmentos_ids = attrs.get('segmentos', [])
-        if segmentos_ids:
-            segmentos = Segmento.objects.filter(id__in=segmentos_ids)
-            if segmentos.count() != len(segmentos_ids):
-                raise serializers.ValidationError({'message': 'Segmentos inválidos'})
-            attrs['segmentos_objetos'] = list(segmentos)
-        else:
-            attrs['segmentos_objetos'] = []
-
-            # ==========================
         # VALIDAÇÃO DE USERNAME / EMAIL
         # (ignora o próprio usuário no UPDATE)
         # ==========================
@@ -887,63 +847,15 @@ class CriacaoEmpresaFuncionarioSerializer(serializers.Serializer):
                 mensagem = 'Filial e administrador criados com sucesso!' if role == Funcionario.ADMIN else 'Filial e funcionário criados com sucesso!'
                 sistema = validated_data.get('sistema')
 
-                # Se o sistema for Azevedo Cloud
-                if sistema and sistema.nome == 'Azevedo dropBox':
-                    segmentos_objetos = validated_data.get('segmentos_objetos', [])
-                    segmentos_ids = [s.id for s in segmentos_objetos]
-
-                    # Criar EmpresaSistema
-                    empresa_sistema = EmpresaSistema.objects.create(
+                # Criar EmpresaSistema para a filial
+                if sistema:
+                    EmpresaSistema.objects.create(
                         empresa=empresa,
                         sistema=sistema,
                         ativo=True,
                         criar_banco=validated_data.get('criar_banco', True),
                         max_funcionarios_registros=validated_data.get('max_funcionarios_registros', 1)
                     )
-
-                    # Criar Cliente
-                    cliente = Cliente.objects.create(
-                        empresa=empresa,
-                        status=StatusChoices.ATIVO
-                    )
-
-                    # Associar segmentos ao cliente
-                    if segmentos_objetos:
-                        try:
-                            # Método 1: Usando add() com lista de objetos
-                            cliente.segmentos.add(*segmentos_objetos)
-
-                            # Verificação no banco
-                            from django.db import connection
-                            with connection.cursor() as cursor:
-                                cursor.execute(
-                                    "SELECT segmento_id FROM cloud_cliente_segmentos WHERE cliente_id = %s ORDER BY segmento_id",
-                                    [cliente.id]
-                                )
-                                rows = cursor.fetchall()
-                                ids_na_tabela = [r[0] for r in rows]
-
-                                # Compara
-                                if set(ids_na_tabela) == set(segmentos_ids):
-                                    print("SUCCESS! Todos os segmentos foram adicionados corretamente!")
-                                else:
-                                    print(f"ATENÇÃO: Diferença entre esperado e encontrado")
-                                    print(f"Esperado: {sorted(segmentos_ids)}")
-                                    print(f"Encontrado: {sorted(ids_na_tabela)}")
-
-                        except Exception as e:
-                            import traceback
-                            traceback.print_exc()
-
-                            # Método alternativo: tentar um por um
-                            for segmento in segmentos_objetos:
-                                try:
-                                    cliente.segmentos.add(segmento)
-                                    print(f"  Segmento {segmento.id} adicionado")
-                                except Exception as e2:
-                                    print(f"  Erro ao adicionar segmento {segmento.id}: {e2}")
-                    else:
-                        print("Nenhum segmento para associar")
 
                 response_data.update({
                     'tipo': tipo_msg,
@@ -952,8 +864,7 @@ class CriacaoEmpresaFuncionarioSerializer(serializers.Serializer):
                     'matriz_id': matriz.id,
                     'funcionario_id': funcionario.id,
                     'role': funcionario.role,
-                    'message': mensagem,
-                    'segmentos_adicionados': segmentos_ids if sistema and sistema.nome == 'Azevedo dropBox' else []
+                    'message': mensagem
                 })
 
             return response_data
@@ -1028,25 +939,6 @@ class CriacaoEmpresaFuncionarioSerializer(serializers.Serializer):
             instance.senha = validated_data['senha_certificado']
 
         instance.save()
-
-        # ==========================
-        # SEGMENTOS (apenas para empresas com sistema Azevedo Cloud)
-        # ==========================
-        segmentos = validated_data.get('segmentos_objetos')
-        if segmentos is not None:
-            try:
-                # Verificar se a empresa tem um cliente associado
-                cliente = Cliente.objects.get(empresa=instance)
-                cliente.segmentos.set(segmentos)
-            except Cliente.DoesNotExist:
-                # Se não existir cliente, criar um se for sistema Azevedo Cloud
-                sistema = instance.sistema
-                if sistema and sistema.nome == 'Azevedo dropBox':
-                    cliente = Cliente.objects.create(
-                        empresa=instance,
-                        status=StatusChoices.ATIVO
-                    )
-                    cliente.segmentos.set(segmentos)
 
         return {
             'empresa_id': instance.id,
