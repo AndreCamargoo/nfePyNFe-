@@ -1,34 +1,26 @@
+import re
 import django_filters
-from django.db.models import Q
+from django.db.models import Q, Value
 from .models import Lead, Cnes, Municipalities
+from django.db.models.functions import Replace
 
 
 class LeadsFilter(django_filters.FilterSet):
-    # Campo de busca geral (q) que olha em vários campos, incluindo nome dos contatos
+    # Busca geral
     q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
 
-    # Filtros exatos ou parciais para campos de texto
+    # Campos de texto
     empresa = django_filters.CharFilter(field_name='empresa', lookup_expr='icontains')
     apelido = django_filters.CharFilter(field_name='apelido', lookup_expr='icontains')
-    telefone = django_filters.CharFilter(field_name='telefone', lookup_expr='icontains')
+    telefone = django_filters.CharFilter(method='filter_telefone')
     cnpj = django_filters.CharFilter(field_name='cnpj', lookup_expr='icontains')
-    cidade = django_filters.CharFilter(
-        field_name='cidade',
-        lookup_expr='iexact'  # 'iexact' = case-insensitive exact match
-    )
-    estado = django_filters.CharFilter(
-        field_name='estado',
-        lookup_expr='iexact'  # 'iexact' = case-insensitive exact match
-    )
+    cidade = django_filters.CharFilter(field_name='cidade', lookup_expr='iexact')
+    estado = django_filters.CharFilter(field_name='estado', lookup_expr='iexact')
     segmento = django_filters.CharFilter(field_name='segmento', lookup_expr='icontains')
-    classificacao = django_filters.CharFilter(
-        field_name='classificacao',
-        lookup_expr='iexact'  # 'iexact' = case-insensitive exact match
-    )
+    classificacao = django_filters.CharFilter(field_name='classificacao', lookup_expr='iexact')
     origem = django_filters.CharFilter(field_name='origem', lookup_expr='icontains')
 
-    # Filtros para relacionamentos (IDs)
-    # Note que usamos o nome do campo no model + __id para filtrar pela chave primária
+    # Relacionamentos
     empresas_grupo = django_filters.NumberFilter(field_name='empresas_grupo__id')
     produtos_interesse = django_filters.NumberFilter(field_name='produtos_interesse__id')
 
@@ -40,15 +32,54 @@ class LeadsFilter(django_filters.FilterSet):
             'empresas_grupo', 'produtos_interesse'
         ]
 
+    # Normalização de telefone
+    def normalize_telefone_queryset(self, queryset):
+        return queryset.annotate(
+            telefone_limpo=Replace(
+                Replace(
+                    Replace(
+                        Replace(
+                            Replace('telefone', Value('('), Value('')),
+                            Value(')'), Value('')
+                        ),
+                        Value('-'), Value('')
+                    ),
+                    Value(' '), Value('')
+                ),
+                Value('+'), Value('')
+            )
+        )
+
+    def clean_number(self, value):
+        return re.sub(r'\D', '', value or '')
+
+    # Filtro de telefone
+    def filter_telefone(self, queryset, name, value):
+        if not value:
+            return queryset
+
+        numero = self.clean_number(value)
+        queryset = self.normalize_telefone_queryset(queryset)
+
+        return queryset.filter(telefone_limpo__icontains=numero)
+
+    # Busca geral
     def filter_by_q(self, queryset, name, value):
         if not value:
             return queryset
 
-        # Busca por: Nome Empresa OU CNPJ OU Cidade OU Nome de algum Contato
+        numero = self.clean_number(value)
+        queryset = self.normalize_telefone_queryset(queryset)
+
         filters = (
-            Q(empresa__icontains=value) | Q(apelido__icontains=value) | Q(cnpj__icontains=value) | Q(cidade__icontains=value) | Q(contatos__nome__icontains=value)
+            Q(empresa__icontains=value) | Q(apelido__icontains=value) | Q(cnpj__icontains=value) |
+            Q(cidade__icontains=value) | Q(contatos__nome__icontains=value)
         )
-        # .distinct() é importante quando filtramos por relacionamentos (contatos) para evitar duplicatas
+
+        # Se tiver número na busca, inclui telefone
+        if numero:
+            filters |= Q(telefone_limpo__icontains=numero)
+
         return queryset.filter(filters).distinct()
 
 
