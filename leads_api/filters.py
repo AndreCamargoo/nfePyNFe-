@@ -10,6 +10,7 @@ class LeadsFilter(django_filters.FilterSet):
     # Filtros exatos ou parciais para campos de texto
     empresa = django_filters.CharFilter(field_name='empresa', lookup_expr='icontains')
     apelido = django_filters.CharFilter(field_name='apelido', lookup_expr='icontains')
+    telefone = django_filters.CharFilter(field_name='telefone', lookup_expr='icontains')
     cnpj = django_filters.CharFilter(field_name='cnpj', lookup_expr='icontains')
     cidade = django_filters.CharFilter(
         field_name='cidade',
@@ -34,8 +35,8 @@ class LeadsFilter(django_filters.FilterSet):
     class Meta:
         model = Lead
         fields = [
-            'empresa', 'apelido', 'cnpj', 'cidade', 'estado',
-            'segmento', 'classificacao', 'origem',
+            'empresa', 'apelido', 'telefone', 'cnpj',
+            'cidade', 'estado', 'segmento', 'classificacao', 'origem',
             'empresas_grupo', 'produtos_interesse'
         ]
 
