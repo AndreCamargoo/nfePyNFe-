@@ -6,6 +6,8 @@ import os
 from django.http import HttpResponse
 from django.utils import timezone
 from django.http import FileResponse, Http404
+from django.db.models import Count, Prefetch
+from django.db.models.functions import Lower
 
 from rest_framework import generics, status
 from rest_framework.views import APIView
@@ -13,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 # Serializers, Models
-from leads_api.models import Company, Product, Event, Lead, Cnes, Municipalities
+from leads_api.models import Company, Product, Event, Lead, Contact, Cnes, Municipalities
 from leads_api.serializer import (
     CompanySerializer, ProductSerializer, EventSerializer,
     LeadSerializer, FileUploadSerializer,
@@ -156,74 +158,83 @@ class LeadRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 
 class LeadExportView(generics.GenericAPIView):
     """
-    Exportação COMPLETA (Dump) de todos os leads ativos.
-    Utiliza prefetch_related para otimizar as consultas de ManyToMany e Reverse FK.
+    Exportação de leads no formato do template de importação.
+    Suporta filtros via LeadsFilter. Uma linha por contato (repete dados do lead).
     """
-    # Otimizamos a query com prefetch_related para 'empresas_grupo', 'produtos_interesse' e 'contatos'
     queryset = Lead.objects.filter(deleted_at__isnull=True)\
-        .prefetch_related('empresas_grupo', 'produtos_interesse', 'contatos')\
+        .prefetch_related(
+            'empresas_grupo',
+            'produtos_interesse',
+            Prefetch('contatos', queryset=Contact.objects.filter(deleted_at__isnull=True))
+        )\
         .order_by('-created_at')
 
-    filter_backends = []
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = LeadsFilter
     permission_classes = [IsAuthenticated]
     pagination_class = None
 
     def get(self, request, *args, **kwargs):
-        leads_to_export = self.get_queryset()
+        leads_to_export = self.filter_queryset(self.get_queryset())
 
         response = HttpResponse(
             content_type='text/csv',
-            headers={'Content-Disposition': 'attachment; filename="leads_full_export.csv"'},
+            headers={'Content-Disposition': 'attachment; filename="leads_export.csv"'},
         )
         response.write('\ufeff')  # BOM para UTF-8 no Excel
 
         writer = csv.writer(response, delimiter=';')
 
-        # Cabeçalho baseado estritamente no model Lead
         writer.writerow([
-            'Empresa', 'Apelido', 'CNPJ', 'CNES', 'Telefone', 'Cidade', 'Estado',
-            'Segmento', 'Classificação', 'Origem', 'Cod. Nat. Jurídica',
-            'Natureza Jurídica', 'Empresas do Grupo', 'Produtos Interesse', 
-            'Contatos (JSON)', 'Observações', 'Criado em', 'Atualizado em'
+            'Nome da conta', 'CNPJ', 'CNES', 'Conta: Telefone',
+            'Cidade de correspondência', 'Estado/Província de correspondência',
+            'Segmento', 'É Cliente?', 'Origem',
+            'Código Natureza Jurídica', 'Natureza Jurídica',
+            'Primeiro Nome', 'Sobrenome', 'Cargo', 'Email', 'Celular', 'Telefone', 'Email Secundário',
+            'Empresas do Grupo', 'Produtos'
         ])
 
         for lead in leads_to_export:
-            # Extração de nomes das relações ManyToMany
             grupos = ", ".join([g.nome for g in lead.empresas_grupo.all()])
             produtos = ", ".join([p.nome for p in lead.produtos_interesse.all()])
 
-            # Montagem da lista de contatos (RelatedName definido no model de Contatos costuma ser 'contatos')
-            contatos_list = [
-                {
-                    "nome": c.nome,
-                    "setor": c.setor,
-                    "email": c.email,
-                    "email_extra": c.email_extra,
-                    "celular": c.celular
-                }
-                for c in lead.contatos.all()
-            ]
+            nome_conta = lead.apelido or lead.empresa or ""
+            e_cliente = "Verdadeiro" if (lead.classificacao or '').lower() == 'cliente' else "Falso"
 
-            writer.writerow([
-                lead.empresa,
-                lead.apelido or "",
+            lead_base = [
+                nome_conta,
                 lead.cnpj or "",
                 lead.cnes or "",
                 lead.telefone or "",
                 lead.cidade or "",
                 lead.estado or "",
                 lead.segmento or "",
-                lead.classificacao or "Não Cliente",
+                e_cliente,
                 lead.origem or "",
                 lead.cod_nat_jur or "",
                 lead.natureza_juridica or "",
-                grupos,
-                produtos,
-                json.dumps(contatos_list, ensure_ascii=False),
-                lead.observacoes or "",
-                lead.created_at.strftime('%d/%m/%Y %H:%M') if lead.created_at else "",
-                lead.updated_at.strftime('%d/%m/%Y %H:%M') if lead.updated_at else ""
-            ])
+            ]
+
+            contatos = list(lead.contatos.all())
+
+            if not contatos:
+                writer.writerow(lead_base + ["", "", "", "", "", "", "", grupos, produtos])
+            else:
+                for contato in contatos:
+                    partes = (contato.nome or '').split(' ', 1)
+                    primeiro_nome = partes[0] if partes else ''
+                    sobrenome = partes[1] if len(partes) > 1 else ''
+                    writer.writerow(lead_base + [
+                        primeiro_nome,
+                        sobrenome,
+                        contato.setor or "",
+                        contato.email or "",
+                        contato.celular or "",
+                        contato.telefone_contato or "",
+                        contato.email_extra or "",
+                        grupos,
+                        produtos
+                    ])
 
         return response
 
@@ -234,6 +245,114 @@ class LeadCheckDuplicityView(APIView):
     def post(self, request):
         result = DuplicationService.analyze(request.data)
         return Response(result)
+
+
+class LeadDeduplicateView(APIView):
+    """
+    Agrupa leads duplicados existentes na base (por CNPJ ou por nome de empresa),
+    migra os contatos únicos para o registro primário e faz soft-delete nos duplicados.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        merged_groups = 0
+        contacts_moved = 0
+        leads_removed = 0
+        processed_ids = set()
+
+        with transaction.atomic():
+            # --- Duplicatas por CNPJ ---
+            duplicate_cnpjs = (
+                Lead.objects.filter(deleted_at__isnull=True, cnpj__isnull=False)
+                .exclude(cnpj='')
+                .values('cnpj')
+                .annotate(count=Count('id'))
+                .filter(count__gt=1)
+                .values_list('cnpj', flat=True)
+            )
+
+            for cnpj in duplicate_cnpjs:
+                leads = list(
+                    Lead.objects.filter(deleted_at__isnull=True, cnpj=cnpj)
+                    .order_by('created_at')
+                )
+                if len(leads) <= 1:
+                    continue
+
+                primary = leads[0]
+                processed_ids.add(primary.id)
+
+                for dup in leads[1:]:
+                    if dup.id in processed_ids:
+                        continue
+                    processed_ids.add(dup.id)
+                    self._merge_contacts(primary, dup)
+                    contacts_moved += dup.contatos.filter(lead=primary).count()
+                    dup.deleted_at = timezone.now()
+                    if request.user.is_authenticated:
+                        dup.deleted_by = request.user
+                    dup.save()
+                    leads_removed += 1
+
+                merged_groups += 1
+
+            # --- Duplicatas por nome de empresa ---
+            duplicate_empresas = (
+                Lead.objects.filter(deleted_at__isnull=True)
+                .exclude(id__in=processed_ids)
+                .annotate(empresa_lower=Lower('empresa'))
+                .values('empresa_lower')
+                .annotate(count=Count('id'))
+                .filter(count__gt=1)
+                .exclude(empresa_lower='')
+                .values_list('empresa_lower', flat=True)
+            )
+
+            for empresa_lower in duplicate_empresas:
+                leads = list(
+                    Lead.objects.filter(deleted_at__isnull=True, empresa__iexact=empresa_lower)
+                    .exclude(id__in=processed_ids)
+                    .order_by('created_at')
+                )
+                if len(leads) <= 1:
+                    continue
+
+                primary = leads[0]
+                processed_ids.add(primary.id)
+
+                for dup in leads[1:]:
+                    if dup.id in processed_ids:
+                        continue
+                    processed_ids.add(dup.id)
+                    self._merge_contacts(primary, dup)
+                    dup.deleted_at = timezone.now()
+                    if request.user.is_authenticated:
+                        dup.deleted_by = request.user
+                    dup.save()
+                    leads_removed += 1
+
+                merged_groups += 1
+
+        return Response({
+            "groups_merged": merged_groups,
+            "contacts_moved": contacts_moved,
+            "leads_removed": leads_removed
+        })
+
+    def _merge_contacts(self, primary, duplicate):
+        for contact in duplicate.contatos.filter(deleted_at__isnull=True):
+            if contact.email:
+                already_exists = primary.contatos.filter(
+                    email=contact.email, deleted_at__isnull=True
+                ).exists()
+            else:
+                already_exists = primary.contatos.filter(
+                    nome__iexact=contact.nome, deleted_at__isnull=True
+                ).exists()
+
+            if not already_exists:
+                contact.lead = primary
+                contact.save()
 
 
 class LeadGenerateStrategyView(APIView):

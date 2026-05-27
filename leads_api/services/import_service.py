@@ -503,7 +503,7 @@ class ImportService:
 
     @staticmethod
     def _process_empresas_grupo(lead, row):
-        grupos_str = row.get('Grupo Empresa', '')
+        grupos_str = row.get('Grupo Empresa', '') or row.get('Empresas do Grupo', '')
         lead.empresas_grupo.clear()
 
         if not grupos_str or grupos_str.strip() == '':
@@ -528,7 +528,7 @@ class ImportService:
 
     @staticmethod
     def _process_produtos_interesse(lead, row):
-        produtos_str = row.get('Produtos Interesse', '')
+        produtos_str = row.get('Produtos Interesse', '') or row.get('Produtos', '')
         lead.produtos_interesse.clear()
 
         if not produtos_str or produtos_str.strip() == '':
@@ -554,11 +554,16 @@ class ImportService:
     @staticmethod
     def _process_contact(lead, contact_data):
         email = contact_data.get('email', '')
+        nome = contact_data.get('nome', '')
 
         if not email:
+            if nome and Contact.objects.filter(
+                lead=lead, nome__iexact=nome, deleted_at__isnull=True
+            ).exists():
+                return
             Contact.objects.create(
                 lead=lead,
-                nome=contact_data.get('nome', '')[:500],
+                nome=nome[:500],
                 setor=contact_data.get('setor', '')[:300],
                 email='',
                 celular=contact_data.get('celular', '')[:100],
@@ -618,7 +623,10 @@ class ImportService:
             razao_social = ImportService.normalize_string(row.get('Razao Social', ''))
             nome_conta = ImportService.normalize_string(row.get('Nome da conta', ''))
 
-            lead = Lead(empresa=razao_social[:500], apelido=nome_conta[:500])
+            empresa = razao_social or nome_conta or 'sem nome'
+            lead = Lead(empresa=empresa[:500])
+            if nome_conta:
+                lead.apelido = nome_conta[:500]
             is_new = True
 
             ImportService._update_lead_fields(lead, row, cnes_encontrado)
@@ -628,15 +636,10 @@ class ImportService:
             ImportService._process_empresas_grupo(lead, row)
             ImportService._process_produtos_interesse(lead, row)
         else:
-            logger.info(f"Lead existente encontrado. Atualizando dados: {lead.empresa or lead.apelido}")
+            logger.info(f"Lead existente encontrado. Apenas adicionando novos contatos: {lead.empresa or lead.apelido}")
             if hasattr(lead, 'deleted_at') and lead.deleted_at:
                 lead.deleted_at = None
                 lead.save()
-
-            is_updated = ImportService._update_lead_fields(lead, row, cnes_encontrado)
-
-            ImportService._process_empresas_grupo(lead, row)
-            ImportService._process_produtos_interesse(lead, row)
 
         contacts = ImportService._parse_contacts_from_row(row)
         for contact_data in contacts:

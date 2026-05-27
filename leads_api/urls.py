@@ -4,7 +4,7 @@ from .views import (
     ProductListCreateView, ProductRetrieveUpdateDestroyView,
     EventListCreateView, EventRetrieveUpdateDestroyView, EventGenerateEmailView,
     LeadListCreateView, LeadRetrieveUpdateDestroyView, LeadCheckDuplicityView, LeadGenerateStrategyView,
-    LeadBulkDeleteView, LeadLastTimestampsView, LeadExportView,
+    LeadBulkDeleteView, LeadLastTimestampsView, LeadExportView, LeadDeduplicateView,
     CnesListView, CnesImportView, MunicipalitiesView, MunicipalitiesImportView,
     LeadImportView, LeadImportStatusView, LeadImportCancelView, LeadImportTasksView,
     LeadImportDownloadReportView, LeadImportCleanupView
@@ -38,6 +38,7 @@ urlpatterns = [
 
     path('leads/<int:pk>/', LeadRetrieveUpdateDestroyView.as_view()),
     path('leads/check-duplicity/', LeadCheckDuplicityView.as_view()),
+    path('leads/deduplicate/', LeadDeduplicateView.as_view()),
     path('leads/generate-strategy/', LeadGenerateStrategyView.as_view()),
     path('leads/bulk-delete/', LeadBulkDeleteView.as_view()),
 
