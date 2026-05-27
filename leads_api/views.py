@@ -716,6 +716,7 @@ class LeadImportView(APIView):
         celery -A app worker --loglevel=info --color
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
 
     def get(self, request):
         """
