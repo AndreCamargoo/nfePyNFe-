@@ -364,7 +364,7 @@ class ImportService:
             cnpj_limpo = ImportService.clean_numeric(cnpj_raw)
             if cnpj_limpo:
                 lead = Lead.objects.filter(cnpj=cnpj_limpo).first()
-                if lead: 
+                if lead:
                     return lead
 
         # 2. Busca Exata por CNES (Identificador forte da área de saúde)

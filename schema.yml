@@ -6,14 +6,18 @@ info:
 paths:
   /api/v1/authentication/token/:
     post:
-      operationId: 01_obter_token_acesso
-      description: Retorna um par de tokens (access e refresh) para autenticação JWT.
-      summary: 01 Obter token de acesso
+      operationId: 01_login
+      description: "\n    Realiza login e retorna tokens JWT em cookies HttpOnly.\n\
+        \n    **Validações:**\n    - Usuário deve ter vínculo ativo com pelo menos\
+        \ uma empresa\n    - A empresa deve ter pelo menos um sistema ativo contratado\n\
+        \n    **Segurança:**\n    - Tokens armazenados em cookies HttpOnly (imunes\
+        \ a XSS)\n    - Proteção CSRF com SameSite=Lax\n    "
+      summary: 01 Login obter token de acesso
       tags:
       - Autenticação
       requestBody:
         content:
-          application/x-www-form-urlencoded:
+          application/json:
             schema:
               type: object
               properties:
@@ -23,16 +27,13 @@ paths:
                 password:
                   type: string
                   format: password
-                  description: Senha do usuário
+                  description: Senha
               required:
               - username
               - password
-            examples:
-              ExemploDeRequisição:
-                value:
-                  username: usuario123
-                  password: senha123
-                summary: Exemplo de requisição
+      security:
+      - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -43,85 +44,54 @@ paths:
               examples:
                 ExemploDeResposta:
                   value:
-                    access: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-                    refresh: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+                    message: Login realizado com sucesso
+                    user:
+                      id: 1
                   summary: Exemplo de resposta
-          description: Tokens gerados com sucesso
+          description: Login realizado com sucesso
+        '400':
+          description: Credenciais não fornecidas
         '401':
           description: Credenciais inválidas
+        '403':
+          description: Sem acesso a sistemas
   /api/v1/authentication/token/refresh/:
     post:
-      operationId: 02_atualizar_token_acesso
-      description: Usa o token de refresh para obter um novo token de acesso.
-      summary: 02 Atualizar token de acesso
+      operationId: 02_refresh_token
+      description: Atualiza o access token usando o refresh token armazenado no cookie
+        HttpOnly.
+      summary: 02 Refresh token
       tags:
       - Autenticação
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                refresh:
-                  type: string
-                  description: Token de refresh
-              required:
-              - refresh
-            examples:
-              ExemploDeRequisição:
-                value:
-                  refresh: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-                summary: Exemplo de requisição
+      security:
+      - jwtAuth: []
+      - {}
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-              examples:
-                ExemploDeResposta:
-                  value:
-                    access: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-                  summary: Exemplo de resposta
           description: Token atualizado com sucesso
         '401':
-          description: Token de refresh inválido ou expirado
-  /api/v1/authentication/token/verify/:
+          description: Refresh token inválido ou expirado
+  /api/v1/authentication/logout/:
     post:
-      operationId: 03_verificar_token_acesso
-      description: Verifica se um token (access ou refresh) é válido.
-      summary: 03 Verificar token
+      operationId: 03_logout
+      description: Realiza logout removendo os cookies de autenticação.
+      summary: 03 Logout
       tags:
       - Autenticação
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                token:
-                  type: string
-                  description: Token a ser verificado
-              required:
-              - token
-            examples:
-              ExemploDeRequisição:
-                value:
-                  token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-                summary: Exemplo de requisição
+      security:
+      - jwtAuth: []
       responses:
         '200':
-          description: Token válido
+          description: Logout realizado com sucesso
         '401':
-          description: Token inválido
+          description: Usuário não autenticado
   /api/v1/accounts/signup/:
     post:
-      operationId: 04_criar_novo_usuario
+      operationId: 01_criar_novo_usuario
       description: Cria uma nova conta de usuário no sistema.
-      summary: 04 Criar novo usuário
+      summary: 01 Criar novo usuário
       tags:
-      - Autenticação
+      - Usuários
       requestBody:
         content:
           application/json:
@@ -143,13 +113,6 @@ paths:
               - username
               - email
               - password
-            examples:
-              ExemploDeRequisição:
-                value:
-                  username: novousuario
-                  email: novo@example.com
-                  password: senhasegura123
-                summary: Exemplo de requisição
       responses:
         '201':
           content:
@@ -157,29 +120,16 @@ paths:
               schema:
                 type: object
                 additionalProperties: {}
-              examples:
-                ExemploDeRequisição:
-                  value:
-                    username: novousuario
-                    email: novo@example.com
-                    password: senhasegura123
-                  summary: Exemplo de requisição
-                ExemploDeResposta:
-                  value:
-                    id: 1
-                    username: usuario123
-                    email: usuario@example.com
-                  summary: Exemplo de resposta
           description: Usuário criado com sucesso
         '400':
-          description: Dados inválidos ou campos faltando
+          description: Dados inválidos
   /api/v1/accounts/password-reset/:
     post:
-      operationId: 05_solicitar_redefinicao_senha
+      operationId: 02_solicitar_redefinicao_senha
       description: Solicita o envio de um e-mail com link para redefinição de senha.
-      summary: 05 Solicitar redefinição de senha
+      summary: 02 Solicitar redefinição de senha
       tags:
-      - Autenticação
+      - Usuários
       requestBody:
         content:
           application/json:
@@ -192,11 +142,6 @@ paths:
                   description: E-mail cadastrado
               required:
               - email
-            examples:
-              ExemploDeRequisição:
-                value:
-                  email: usuario@example.com
-                summary: Exemplo de requisição
       responses:
         '200':
           description: E-mail enviado com sucesso
@@ -204,11 +149,11 @@ paths:
           description: E-mail não encontrado
   /api/v1/accounts/change-password/:
     post:
-      operationId: 06_confirmar_redefinicao_senha
+      operationId: 03_confirmar_redefinicao_senha
       description: Confirma a redefinição de senha usando o token recebido por e-mail.
-      summary: 06 Confirmar redefinição de senha
+      summary: 03 Confirmar redefinição de senha
       tags:
-      - Autenticação
+      - Usuários
       requestBody:
         content:
           application/json:
@@ -229,13 +174,6 @@ paths:
               - uidb64
               - token
               - new_password
-            examples:
-              ExemploDeRequisição:
-                value:
-                  uidb64: MQ
-                  token: abc123def456
-                  new_password: novasenha123
-                summary: Exemplo de requisição
       responses:
         '200':
           description: Senha redefinida com sucesso
@@ -247,25 +185,11 @@ paths:
       description: Retorna os dados do perfil do usuário autenticado.
       summary: 01 Obter perfil do usuário
       tags:
-      - Perfil do Usuário
+      - Perfil
       security:
       - jwtAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-              examples:
-                ExemploDeResposta:
-                  value:
-                    id: 1
-                    username: usuario123
-                    email: usuario@example.com
-                    first_name: João
-                    last_name: Silva
-                  summary: Exemplo de resposta
           description: Dados do perfil obtidos com sucesso
         '401':
           description: Usuário não autenticado
@@ -284,10 +208,10 @@ paths:
         name: pk
         schema:
           type: integer
-        description: ID do usuário a ser atualizado
+        description: ID do usuário
         required: true
       tags:
-      - Perfil do Usuário
+      - Perfil
       requestBody:
         content:
           application/json:
@@ -311,60 +235,29 @@ paths:
                   type: string
                   format: password
                   description: Nova senha
-            examples:
-              ExemploDeRequisiçãoParaUsuárioNormal:
-                value:
-                  first_name: João
-                  last_name: Silva
-                  email: joao.silva@example.com
-                summary: Exemplo de requisição para usuário normal
-              ExemploDeRequisiçãoParaSuperusuário:
-                value:
-                  first_name: João
-                  last_name: Silva
-                  email: joao.silva@example.com
-                  is_active: true
-                  is_staff: true
-                summary: Exemplo de requisição para superusuário
       security:
       - jwtAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-              examples:
-                ExemploDeRequisiçãoParaUsuárioNormal:
-                  value:
-                    first_name: João
-                    last_name: Silva
-                    email: joao.silva@example.com
-                  summary: Exemplo de requisição para usuário normal
-                ExemploDeRequisiçãoParaSuperusuário:
-                  value:
-                    first_name: João
-                    last_name: Silva
-                    email: joao.silva@example.com
-                    is_active: true
-                    is_staff: true
-                  summary: Exemplo de requisição para superusuário
-                ExemploDeResposta:
-                  value:
-                    id: 1
-                    username: usuario123
-                    email: usuario@example.com
-                    first_name: João
-                    last_name: Silva
-                    is_active: true
-                    is_staff: false
-                  summary: Exemplo de resposta
           description: Perfil atualizado com sucesso
         '400':
           description: Dados inválidos
         '403':
           description: Permissão negada
+  /api/v1/authentication/permissions/:
+    get:
+      operationId: 03_obter_permissoes
+      description: Retorna as permissões do usuário para o frontend.
+      summary: 03 Obter permissões do usuário
+      tags:
+      - Perfil
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Permissões obtidas com sucesso
+        '401':
+          description: Usuário não autenticado
   /api/v1/sistemas/:
     get:
       operationId: 01_listar_sistemas
@@ -957,13 +850,6 @@ paths:
       operationId: 01_listar_categorias
       description: Retorna a lista de categorias e subcategorias de empresas.
       summary: 01 Listar todas as categorias de empresas
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
       tags:
       - Categoria empresa
       security:
@@ -973,7 +859,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedCategoriaEmpresaModelList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoriaEmpresaModel'
           description: ''
   /api/v1/empresas/:
     get:
@@ -1874,6 +1762,16 @@ paths:
       summary: 01 Listar notas fiscais
       parameters:
       - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      - in: query
         name: ide_cUF
         schema:
           type: string
@@ -1915,16 +1813,6 @@ paths:
         schema:
           type: string
         description: Pesquisa geral (CNPJ, nome, chave ou data)
-      - in: query
-        name: page
-        schema:
-          type: integer
-        description: Número da página
-      - in: query
-        name: pageSize
-        schema:
-          type: integer
-        description: 'Tamanho da página (máx: 100)'
       tags:
       - '[Allnube] NF'
       security:
@@ -1936,24 +1824,181 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedNfeModelList'
               examples:
-                ExemploDeResposta:
+                ExemploDeResposta(dadosFictícios):
                   value:
                     count: 123
                     next: http://api.example.org/accounts/?page=4
                     previous: http://api.example.org/accounts/?page=2
                     results:
-                    - count: 150
-                      next: http://api.example.com/api/v1/nfes/?page=2
+                    - count: 1
+                      next: null
                       previous: null
                       results:
-                      - id: 1
-                        chave: '35210507564634000135550010000012341000012345'
-                        dhEmi: '2023-10-15T14:30:00Z'
+                      - id: 1001
+                        chave: '35250912345678000170550010000000000000000000'
+                        versao: '4.00'
+                        dhEmi: '2025-09-15T10:12:30-03:00'
+                        dhSaiEnt: '2025-09-15T10:12:30-03:00'
+                        fileXml: https://example.com/media/xml/nfe_1001.xml
+                        filePdf: https://example.com/media/pdf/nfe_1001.pdf
+                        empresa:
+                          id: 10
+                          razao_social: CONFEITARIA DOCE LAR LTDA
+                          documento: '12345678000199'
+                          ie: '123456789112'
+                          uf: SP
+                          file: https://example.com/media/certificados/doce_lar_cert.pfx
+                          status: '1'
+                          created_at: '2025-01-05T09:00:00-03:00'
+                          updated_at: '2025-09-20T14:30:00-03:00'
+                          usuario: 2
+                          sistema: 1
+                          categoria: 1
+                          matriz_filial: null
+                        ide:
+                          id: 1001
+                          cUF: '35'
+                          natOp: VENDA MERCADO INTERNO
+                          mod: '55'
+                          serie: '1'
+                          nNF: '10001'
+                          tpNF: 1
+                          idDest: 1
+                          cMunFG: '3552205'
+                          tpImp: 1
+                          tpEmis: 1
+                          cDV: '5'
+                          finNFe: 1
+                          indFinal: 0
+                          indPres: 1
+                          indIntermed: 0
+                          procEmi: 0
+                          verProc: '4.00'
+                          nota_fiscal: 1001
                         emitente:
-                          xNome: Empresa Exemplo Ltda
-                          CNPJ: 07.564.634/0001-35
-                        valor: 1500.75
-                  summary: Exemplo de resposta
+                          id: 1001
+                          CNPJ: '98765432000166'
+                          xNome: ALIMENTOS SAUDAVEIS S/A
+                          xFant: ALIMENTOS SAUDAVEIS
+                          IE: '987654321119'
+                          CRT: 3
+                          xLgr: RUA DA INDUSTRIA, 500
+                          nro: '500'
+                          xBairro: PARQUE INDUSTRIAL
+                          cMun: '3552205'
+                          xMun: SAO PAULO
+                          UF: SP
+                          CEP: '04567000'
+                          cPais: '1058'
+                          xPais: BRASIL
+                          fone: '1130000000'
+                          nota_fiscal: 1001
+                        destinatario:
+                          id: 1001
+                          CNPJ: '12345678000199'
+                          xNome: CONFEITARIA DOCE LAR LTDA
+                          IE: '123456789112'
+                          indIEDest: 1
+                          xLgr: RUA DAS FLORES, 200
+                          nro: '200'
+                          xCpl: LOJA 02
+                          xBairro: CENTRO
+                          cMun: '3552205'
+                          xMun: SAO PAULO
+                          UF: SP
+                          CEP: '01010010'
+                          cPais: '1058'
+                          xPais: BRASIL
+                          nota_fiscal: 1001
+                        produtos:
+                        - id: 3001
+                          nItem: 1
+                          cProd: A001
+                          cEAN: '0001234500012'
+                          xProd: Bolo de Chocolate 1kg
+                          NCM: '19059090'
+                          CFOP: '5101'
+                          uCom: UN
+                          qCom: '5.0000'
+                          vUnCom: '25.0000'
+                          vProd: '125.00'
+                          uTrib: UN
+                          qTrib: '5.0000'
+                          vUnTrib: '25.0000'
+                          indTot: 1
+                          nota_fiscal: 1001
+                          imposto:
+                            id: 3001
+                            vTotTrib: '5.00'
+                            orig: '0'
+                            CST: '00'
+                            vIPI: '0.00'
+                            vPIS: '0.50'
+                            vCOFINS: '1.50'
+                            produto: 3001
+                        - id: 3002
+                          nItem: 2
+                          cProd: B002
+                          cEAN: 0001234500029
+                          xProd: Suco de Laranja 1,5L
+                          NCM: '20091900'
+                          CFOP: '5102'
+                          uCom: UN
+                          qCom: '10.0000'
+                          vUnCom: '8.0000'
+                          vProd: '80.00'
+                          uTrib: UN
+                          qTrib: '10.0000'
+                          vUnTrib: '8.0000'
+                          indTot: 1
+                          nota_fiscal: 1001
+                          imposto:
+                            id: 3002
+                            vTotTrib: '3.20'
+                            orig: '0'
+                            CST: '60'
+                            vIPI: '0.00'
+                            vPIS: '0.32'
+                            vCOFINS: '0.96'
+                            produto: 3002
+                        total:
+                          vBC: '0.00'
+                          vICMS: '0.00'
+                          vICMSDeson: null
+                          vFCP: null
+                          vBCST: null
+                          vST: null
+                          vFCPST: null
+                          vFCPSTRet: null
+                          vProd: '205.00'
+                          vFrete: '10.00'
+                          vSeg: '0.00'
+                          vDesc: '0.00'
+                          vII: null
+                          vIPI: '0.00'
+                          vIPIDevol: null
+                          vPIS: '0.82'
+                          vCOFINS: '2.46'
+                          vOutro: '0.00'
+                          vNF: '217.28'
+                          vTotTrib: '8.00'
+                          nota_fiscal: 1001
+                        transporte:
+                          modFrete: 0
+                          qVol: 1
+                          nota_fiscal: 1001
+                        cobranca:
+                          nFat: FAT-2025-0001
+                          vOrig: '217.28'
+                          vDesc: '0.00'
+                          vLiq: '217.28'
+                          nota_fiscal: 1001
+                        pagamentos:
+                        - forma: '01'
+                          valor: '217.28'
+                          meio: DINHEIRO
+                          nota_fiscal: 1001
+                  summary: Exemplo de resposta (dados fictícios)
           description: ''
         '401':
           content:
@@ -1971,7 +2016,7 @@ paths:
           description: ''
   /api/v1/nfes/processar-lote/:
     post:
-      operationId: processar_lote_nfe
+      operationId: 02_processar_lote_nfe
       description: "\n        Processa um lote de arquivos XML de NFe, Eventos e Resumos\
         \ contidos em um arquivo ZIP.\n\n        ## Funcionalidades\n        - Processa\
         \ automaticamente diferentes tipos de XML (NFe, Eventos, Resumos)\n      \
@@ -1984,7 +2029,7 @@ paths:
         \ empresa\n        3. Extração do arquivo ZIP\n        4. Processamento de\
         \ cada XML individualmente\n        5. Roteamento para o processador específico\n\
         \        6. Retorno dos resultados consolidados\n        "
-      summary: Processar lote de NFe
+      summary: 02 Processar lote de NFe
       tags:
       - '[Allnube] NF'
       requestBody:
@@ -2075,9 +2120,109 @@ paths:
                     error: Erro interno no processamento do lote
                   summary: Erro interno
           description: ''
+  /api/v1/nfes/gerar-danfe/{id}/:
+    get:
+      operationId: 03_gerar_danfe
+      description: "\n        Gera o Documento Auxiliar da Nota Fiscal Eletrônica\
+        \ (DANFE) em formato PDF a partir do XML da NFe.\n\n        ## Funcionalidades\n\
+        \        - Gera PDF da DANFE a partir do XML da nota fiscal\n        - Verifica\
+        \ se o PDF já foi gerado anteriormente (evita reprocessamento)\n        -\
+        \ Valida se a nota fiscal pertence à empresa do usuário logado\n        -\
+        \ Salva o PDF gerado no sistema de arquivos\n        - Atualiza o registro\
+        \ da nota fiscal com o caminho do PDF\n\n        ## Fluxo de Processamento\n\
+        \        1. Busca a nota fiscal pelo ID\n        2. Valida se a nota pertence\
+        \ à empresa do usuário logado\n        3. Verifica se o XML existe\n     \
+        \   4. Checa se o PDF já foi gerado anteriormente\n        5. Gera o PDF usando\
+        \ a biblioteca Danfe\n        6. Salva o caminho do PDF no registro da nota\n\
+        \        7. Retorna a URL para download do PDF\n\n        ## Requisitos\n\
+        \        - O XML da nota fiscal deve estar salvo no sistema\n        - A nota\
+        \ fiscal deve pertencer à empresa do usuário logado\n        - A biblioteca\
+        \ Danfe deve estar instalada e configurada\n        "
+      summary: 03 Gerar DANFE
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - '[Allnube] NF'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                DANFEGeradoComSucesso:
+                  value:
+                    message: DANFE gerado com sucesso!
+                    pdf_path: https://exemplo.com/media/danfe/NFe123456789.pdf
+                  summary: DANFE gerado com sucesso
+                DANFEJáExistente:
+                  value:
+                    message: DANFE já gerado anteriormente.
+                    pdf_path: https://exemplo.com/media/danfe/NFe123456789.pdf
+                  summary: DANFE já existente
+          description: DANFE gerado com sucesso ou já existente
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                XMLNãoEncontrado:
+                  value:
+                    error: Arquivo XML não encontrado.
+                  summary: XML não encontrado
+                ArquivoXMLNãoEncontradoNoSistema:
+                  value:
+                    error: 'Arquivo XML não encontrado no caminho: /media/xml/NFe123456789.xml'
+                  summary: Arquivo XML não encontrado no sistema
+          description: Erro na requisição
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                NotaNãoPertenceÀEmpresaDoUsuário:
+                  value:
+                    error: Você não tem permissão para acessar esta nota fiscal.
+                  summary: Nota não pertence à empresa do usuário
+          description: Acesso não autorizado
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                NotaNãoEncontrada:
+                  value:
+                    detail: Não encontrado.
+                  summary: Nota não encontrada
+          description: Nota fiscal não encontrada
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ErroNaGeraçãoDoPDF:
+                  value:
+                    error: 'Erro durante a geração do DANFE: [detalhes do erro]'
+                  summary: Erro na geração do PDF
+          description: Erro interno no processamento
   /api/v1/nfes/matriz/:
     get:
-      operationId: 02_listar_notas_fiscais_matriz
+      operationId: 04_listar_notas_fiscais_matriz
       description: "\n        Retorna todas as notas fiscais da matriz do usuário\
         \ autenticado.\n        \n        **Características:**\n        - Lista apenas\
         \ notas da matriz (empresa principal)\n        - Não requer parâmetros na\
@@ -2090,8 +2235,18 @@ paths:
         \ dhEmi_after & dhEmi_before)\n        - `emitente_CNPJ`: CNPJ do emitente\n\
         \        - `emitente_xNome`: Razão social do emitente\n        - `q`: Pesquisa\
         \ geral (CNPJ, nome ou chave)\n        "
-      summary: 02 Listar notas fiscais da matriz
+      summary: 04 Listar notas fiscais da matriz
       parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
       - in: query
         name: ide_cUF
         schema:
@@ -2134,16 +2289,6 @@ paths:
         schema:
           type: string
         description: Pesquisa geral (CNPJ, nome, chave ou data)
-      - in: query
-        name: page
-        schema:
-          type: integer
-        description: Número da página
-      - in: query
-        name: pageSize
-        schema:
-          type: integer
-        description: 'Tamanho da página (máx: 100)'
       tags:
       - '[Allnube] NF'
       security:
@@ -2198,7 +2343,7 @@ paths:
           description: ''
   /api/v1/nfes/filial/{documento}/:
     get:
-      operationId: 03_listar_notas_fiscais_filial
+      operationId: 05_listar_notas_fiscais_filial
       description: "\n        Retorna notas fiscais de uma filial específica através\
         \ do documento (CNPJ).\n        \n        **Características:**\n        -\
         \ Lista notas de uma filial específica\n        - Requer o documento (CNPJ)\
@@ -2212,8 +2357,24 @@ paths:
         \ Data de emissão (range: dhEmi_after & dhEmi_before)\n        - `emitente_CNPJ`:\
         \ CNPJ do emitente\n        - `emitente_xNome`: Razão social do emitente\n\
         \        - `q`: Pesquisa geral (CNPJ, nome ou chave)\n        "
-      summary: 03 Listar notas fiscais por filial
+      summary: 05 Listar notas fiscais por filial
       parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Número da página
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+        description: 'Tamanho da página (máx: 100)'
+      - in: path
+        name: documento
+        schema:
+          type: integer
+        description: Documento (CNPJ) da filial - obrigatório
+        required: true
       - in: query
         name: ide_cUF
         schema:
@@ -2256,22 +2417,6 @@ paths:
         schema:
           type: string
         description: Pesquisa geral (CNPJ, nome, chave ou data)
-      - in: query
-        name: page
-        schema:
-          type: integer
-        description: Número da página
-      - in: query
-        name: pageSize
-        schema:
-          type: integer
-        description: 'Tamanho da página (máx: 100)'
-      - in: path
-        name: documento
-        schema:
-          type: integer
-        description: Documento (CNPJ) da filial - obrigatório
-        required: true
       tags:
       - '[Allnube] NF'
       security:
@@ -2343,7 +2488,7 @@ paths:
           description: ''
   /api/v1/nfes/{id}/:
     get:
-      operationId: 04_obter_nota_fiscal
+      operationId: 06_obter_nota_fiscal
       description: "\n        Retorna os detalhes completos de uma nota fiscal específica.\n\
         \        \n        **Informações incluídas:**\n        - Dados básicos da\
         \ nota (chave, versão, datas)\n        - Informações do emitente\n       \
@@ -2352,7 +2497,7 @@ paths:
         \ e pagamentos\n        \n        **Permissões requeridas:**\n        - Usuário\
         \ autenticado\n        - Acesso via funcionário ativo ou proprietário da empresa\n\
         \        - Permissão para visualizar a nota específica\n        "
-      summary: 04 Obter detalhes de uma nota fiscal
+      summary: 06 Obter detalhes de uma nota fiscal
       parameters:
       - in: path
         name: id
@@ -2493,26 +2638,6 @@ paths:
       summary: 01 Listar todos os produtos das notas fiscais
       parameters:
       - in: query
-        name: cProd
-        schema:
-          type: string
-        description: Filtrar por código do produto
-      - in: query
-        name: xProd
-        schema:
-          type: string
-        description: Filtrar por descrição do produto
-      - in: query
-        name: cEAN
-        schema:
-          type: string
-        description: Filtrar por código EAN
-      - in: query
-        name: q
-        schema:
-          type: string
-        description: Pesquisa geral (descrição, código do produto ou EAN)
-      - in: query
         name: page
         schema:
           type: integer
@@ -2522,6 +2647,26 @@ paths:
         schema:
           type: integer
         description: 'Tamanho da página (máx: 100)'
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (descrição, código do produto ou EAN)
+      - in: query
+        name: xProd
+        schema:
+          type: string
+        description: Filtrar por descrição do produto
+      - in: query
+        name: cProd
+        schema:
+          type: string
+        description: Filtrar por código do produto
+      - in: query
+        name: cEAN
+        schema:
+          type: string
+        description: Filtrar por código EAN
       tags:
       - '[Allnube] NF Produto'
       security:
@@ -2647,26 +2792,6 @@ paths:
       summary: 02 Listar produtos das notas fiscais da matriz
       parameters:
       - in: query
-        name: cProd
-        schema:
-          type: string
-        description: Filtrar por código do produto
-      - in: query
-        name: xProd
-        schema:
-          type: string
-        description: Filtrar por descrição do produto
-      - in: query
-        name: cEAN
-        schema:
-          type: string
-        description: Filtrar por código EAN
-      - in: query
-        name: q
-        schema:
-          type: string
-        description: Pesquisa geral (descrição, código do produto ou EAN)
-      - in: query
         name: page
         schema:
           type: integer
@@ -2676,6 +2801,26 @@ paths:
         schema:
           type: integer
         description: 'Tamanho da página (máx: 100)'
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Pesquisa geral (descrição, código do produto ou EAN)
+      - in: query
+        name: xProd
+        schema:
+          type: string
+        description: Filtrar por descrição do produto
+      - in: query
+        name: cProd
+        schema:
+          type: string
+        description: Filtrar por código do produto
+      - in: query
+        name: cEAN
+        schema:
+          type: string
+        description: Filtrar por código EAN
       tags:
       - '[Allnube] NF Produto'
       security:
@@ -3654,6 +3799,8 @@ components:
           type: string
           format: date-time
           readOnly: true
+        status:
+          type: boolean
         empresa:
           type: integer
           readOnly: true
@@ -3689,6 +3836,8 @@ components:
           type: string
           writeOnly: true
           minLength: 1
+        status:
+          type: boolean
       required:
       - database
       - host
@@ -3844,7 +3993,9 @@ components:
           format: uri
           nullable: true
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -3867,7 +4018,6 @@ components:
       - documento
       - id
       - razao_social
-      - senha
       - sistema
       - status
       - uf
@@ -3877,6 +4027,12 @@ components:
       type: object
       description: Serializer específico para criação
       properties:
+        usuario_especifico:
+          type: integer
+          writeOnly: true
+          nullable: true
+          description: ID do usuário que será o dono da empresa (opcional, se não
+            enviar usa o usuário logado)
         sistema:
           type: integer
         razao_social:
@@ -3901,8 +4057,6 @@ components:
           type: string
           format: binary
           nullable: true
-        status:
-          $ref: '#/components/schemas/StatusEnum'
         categoria:
           type: integer
           nullable: true
@@ -3912,9 +4066,7 @@ components:
       required:
       - documento
       - razao_social
-      - senha
       - sistema
-      - status
       - uf
     EmpresaList:
       type: object
@@ -4113,11 +4265,26 @@ components:
           $ref: '#/components/schemas/RoleEnum'
         status:
           $ref: '#/components/schemas/StatusEnum'
+        first_name:
+          type: string
+          writeOnly: true
+          minLength: 1
+        last_name:
+          type: string
+          writeOnly: true
+          minLength: 1
+        sistema:
+          type: string
+          writeOnly: true
+          minLength: 1
       required:
       - email
       - empresa_id
+      - first_name
+      - last_name
       - password
       - role
+      - sistema
       - status
       - username
     FuncionarioRotaModel:
@@ -4298,29 +4465,6 @@ components:
       - total
       - transporte
       - versao
-    PaginatedCategoriaEmpresaModelList:
-      type: object
-      required:
-      - count
-      - results
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/CategoriaEmpresaModel'
     PaginatedEmitenteModelList:
       type: object
       required:
@@ -4589,6 +4733,18 @@ components:
           $ref: '#/components/schemas/RoleEnum'
         status:
           $ref: '#/components/schemas/StatusEnum'
+        first_name:
+          type: string
+          writeOnly: true
+          minLength: 1
+        last_name:
+          type: string
+          writeOnly: true
+          minLength: 1
+        sistema:
+          type: string
+          writeOnly: true
+          minLength: 1
     PatchedFuncionarioRotaModelRequest:
       type: object
       properties:
@@ -4698,11 +4854,19 @@ components:
     RoleEnum:
       enum:
       - admin
-      - funcionario
+      - auditor
+      - administrativo
+      - estagiario
+      - cliente_externo
+      - cliente
       type: string
       description: |-
         * `admin` - Administrador
-        * `funcionario` - Funcionário
+        * `auditor` - Auditor
+        * `administrativo` - Administrativo
+        * `estagiario` - Estagiário
+        * `cliente_externo` - Cliente Externo
+        * `cliente` - Cliente
     RotaSistemaModel:
       type: object
       description: |-

@@ -3,9 +3,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
 
-from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView
 
-# py ./manage.py spectacular --color --file schema.yml (GERAR DOCUMENTAÇÃO)
+# python ./manage.py spectacular --color --file schema.yml (GERAR DOCUMENTAÇÃO)
+# python manage.py spectacular --file schema.yml
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -21,6 +22,9 @@ urlpatterns = [
     path('api/v1/', include('nfe_evento.urls')),
     path('api/v1/', include('nfe_resumo.urls')),
     path('api/v1/', include('apexcharts.urls')),
+
+    # Azevedo cloud
+    path('api/v1/', include('azevedo_cloud.urls')),
 
     # Agenda rotas e modulos
     # path('api/v1/', include('agendaGrupo.agenda.urls')),

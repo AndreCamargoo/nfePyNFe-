@@ -1,5 +1,9 @@
+
+from django.db import transaction
+from django.core.files.storage import default_storage
+
 from django.db.models import Q
-from django.contrib.auth.models import User
+from django.db.models import Prefetch
 
 from rest_framework import generics
 from rest_framework.views import APIView
@@ -16,11 +20,13 @@ from empresa.models import (
     Empresa, CategoriaEmpresa, ConexaoBanco,
     Funcionario, RotasPermitidas
 )
+from sistema.models import EmpresaSistema
+
 from empresa.serializer import (
     EmpresaModelSerializer, EmpresaCreateSerializer, EmpresaUpdateSerializer, EmpresaListSerializer,
     EmpresaAllModelSerializer, CategoriaEmpresaModelSerializer, ConexaoBancoModelSerializer,
     FuncionarioListSerializer, FuncionarioSerializer, FuncionarioAllModelSerializer,
-    FuncionarioRotaModelSerializer, CriacaoEmpresaFuncionarioSerializer, EmpresaAdminDetailSerializer
+    FuncionarioRotaModelSerializer, EmpresaDetalhesVinculadasSerializer, EmpresaAdminSerializer
 )
 
 from app.permissions import GlobalDefaultPermission, UsuarioIndependenteOuAdmin
@@ -194,8 +200,47 @@ class EmpresaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView)
 
     def get_queryset(self):
         user = self.request.user
+
+        # Verificar se o usuário é super admin
+        if user.is_superuser or user.is_staff:
+            return Empresa.objects.all()
+
+        # Para usuários normais, retorna apenas empresas que pertencem a ele
+        # ou empresas onde ele é funcionário
+        return Empresa.objects.filter(
+            # Empresas onde o usuário é dono
+            Q(usuario=user) |
+            # Empresas onde é funcionário
+            Q(funcionarios_empresa__user=user, funcionarios_empresa__status='1')
+        ).distinct()
+
+    def get_object(self):
+        """
+        Retorna a empresa apenas se o usuário tiver permissão.
+        Sobrescreve para garantir segurança extra.
+        """
+        queryset = self.get_queryset()
         pk = self.kwargs.get('pk')
-        return Empresa.objects.filter(pk=pk)
+
+        try:
+            obj = queryset.get(pk=pk)
+        except Empresa.DoesNotExist:
+            raise NotFound(detail="Empresa não encontrada ou você não tem permissão para acessá-la.")
+
+        # Verificação adicional de permissão
+        user = self.request.user
+        if not (user.is_superuser or user.is_staff or obj.usuario == user):
+            # Verificar se é funcionário ativo
+            is_employee = Funcionario.objects.filter(
+                user=user,
+                empresa=obj,
+                status='1'
+            ).exists()
+
+            if not is_employee:
+                raise PermissionDenied(detail="Você não tem permissão para acessar esta empresa.")
+
+        return obj
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -204,6 +249,164 @@ class EmpresaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView)
 
     def patch(self, request, *args, **kwargs):
         return self.partial_update(request, *args, **kwargs)
+
+
+class EmpresaDetalhesVinculadasAPIView(generics.RetrieveAPIView):
+    """
+    Retorna os detalhes de uma empresa específica e todas as suas empresas vinculadas (filiais),
+    incluindo funcionários da matriz e das filiais.
+    """
+    permission_classes = [
+        IsAuthenticated,
+        UsuarioIndependenteOuAdmin
+    ]
+    serializer_class = EmpresaDetalhesVinculadasSerializer
+
+    def get_object(self):
+        user = self.request.user
+        pk = self.kwargs.get('pk')
+
+        try:
+            empresa = Empresa.objects.get(pk=pk)
+        except Empresa.DoesNotExist:
+            raise NotFound(detail="Empresa não encontrada.")
+
+        # Permissão
+        if not (user.is_superuser or user.is_staff or empresa.usuario == user):
+            is_employee = Funcionario.objects.filter(
+                user=user,
+                empresa=empresa,
+                status='1'
+            ).exists()
+
+            if not is_employee:
+                raise PermissionDenied(
+                    detail="Você não tem permissão para acessar esta empresa."
+                )
+
+        return empresa
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Filiais com funcionários (OTIMIZADO)
+        filiais = Empresa.objects.filter(
+            matriz_filial=instance,
+            status='1'
+        ).prefetch_related(
+            Prefetch(
+                'funcionarios_empresa',
+                queryset=Funcionario.objects.filter(status='1').select_related('user')
+            )
+        )
+
+        # Funcionários da empresa principal
+        funcionarios = Funcionario.objects.filter(
+            empresa=instance,
+            status='1'
+        ).select_related('user')
+
+        funcionarios_data = [
+            {
+                'id': func.id,
+                'user_id': func.user.id,
+                'username': func.user.username,
+                'email': func.user.email,
+                'role': func.role,
+                'status': func.status,
+            }
+            for func in funcionarios
+        ]
+
+        # Monta filiais com funcionários
+        filiais_data = []
+
+        for filial in filiais:
+            funcionarios_filial_data = [
+                {
+                    'id': f.id,
+                    'user_id': f.user.id,
+                    'username': f.user.username,
+                    'email': f.user.email,
+                    'role': f.role,
+                    'status': f.status,
+                }
+                for f in filial.funcionarios_empresa.all()
+            ]
+
+            filiais_data.append({
+                'id': filial.id,
+                'razao_social': filial.razao_social,
+                'documento': filial.documento,
+                'uf': filial.uf,
+                'status': filial.status,
+                'funcionarios': funcionarios_filial_data
+            })
+
+        # Matriz (se for filial)
+        matriz = instance.matriz_filial if instance.matriz_filial else None
+
+        # Conexão banco
+        conexao_banco = None
+        if hasattr(instance, 'conexao_banco') and instance.conexao_banco.status:
+            conexao_banco = {
+                'id': instance.conexao_banco.id,
+                'host': instance.conexao_banco.get_host(),
+                'porta': instance.conexao_banco.get_porta(),
+                'usuario': instance.conexao_banco.get_usuario(),
+                'database': instance.conexao_banco.get_database(),
+            }
+
+        # =========================================================
+        # LISTA DE SISTEMAS (MÚLTIPLOS) - USANDO EmpresaSistema
+        # =========================================================
+        sistemas = []
+
+        # Busca todos os sistemas vinculados via EmpresaSistema
+        empresa_sistemas = EmpresaSistema.objects.filter(
+            empresa=instance,
+            ativo=True
+        ).select_related('sistema')
+
+        for es in empresa_sistemas:
+            sistemas.append({
+                'id': es.sistema.id,
+                'nome': es.sistema.nome,
+                'descricao': getattr(es.sistema, 'descricao', ''),
+                'max_funcionarios_registros': es.max_funcionarios_registros,
+                'criar_banco': es.criar_banco,
+            })
+
+        # RESPONSE FINAL
+        data = {
+            'id': instance.id,
+            'razao_social': instance.razao_social,
+            'documento': instance.documento,
+            'ie': instance.ie,
+            'uf': instance.uf,
+            'status': instance.status,
+            'tipo': 'FILIAL' if instance.matriz_filial else 'MATRIZ',
+
+            'categoria': {
+                'id': instance.categoria.id,
+                'nome': instance.categoria.nome,
+            } if instance.categoria else None,
+
+            'sistemas': sistemas,  # LISTA de sistemas
+            'sistemas_ids': [s['id'] for s in sistemas],  # IDs dos sistemas
+
+            'matriz': {
+                'id': matriz.id,
+                'razao_social': matriz.razao_social,
+                'documento': matriz.documento,
+            } if matriz else None,
+
+            'filiais': filiais_data,
+            'conexao_banco': conexao_banco,
+            'funcionarios': funcionarios_data,
+        }
+
+        return Response(data)
 
 
 class EmpresaPorUsuarioAPIView(generics.RetrieveAPIView):
@@ -221,9 +424,13 @@ class EmpresaPorUsuarioAPIView(generics.RetrieveAPIView):
 
 
 class EmpresasGeraisAPIView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated,
+        # IsAdminUser,
+        UsuarioIndependenteOuAdmin,
+    ]
     serializer_class = EmpresaAllModelSerializer
-    queryset = Empresa.objects.filter(status=1).order_by('created_at')
+    queryset = Empresa.objects.filter(status=1, matriz_filial__isnull=True).order_by('created_at')
     pagination_class = utils.CustomPageSizePagination
 
     def paginate_queryset(self, queryset):
@@ -587,24 +794,28 @@ class FuncionarioRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
         instance = self.get_object()
         user = instance.user
 
-        # Verificar se o usuário está vinculado a outras empresas ATIVAS
+        # Verificar se o usuário está vinculado a OUTRAS empresas ATIVAS
         outras_vinculacoes_ativas = Funcionario.objects.filter(
             user=user,
             status='1'
         ).exclude(id=instance.id)
 
+        # Se ele NÃO tem vínculo com mais nenhuma empresa, excluímos o login dele de vez.
         if not outras_vinculacoes_ativas.exists():
-            user.is_active = False
-            user.save()
-
-        # Soft delete
-        instance.status = '2'
-        instance.save()
-
-        return Response(
-            {"message": "Funcionário desativado com sucesso."},
-            status=status.HTTP_200_OK
-        )
+            # Hard delete no auth_user
+            # (isso apaga em cascata o Funcionario devido ao on_delete=models.CASCADE)
+            user.delete()
+            return Response(
+                {"message": "Funcionário e login excluídos definitivamente com sucesso."},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        else:
+            # Se ele ainda está em outra empresa (raro, mas possível), deletamos apenas este vínculo
+            instance.delete()
+            return Response(
+                {"message": "Vínculo do funcionário com esta empresa removido com sucesso."},
+                status=status.HTTP_204_NO_CONTENT
+            )
 
 
 class FuncionarioGeraisAPIView(generics.ListAPIView):
@@ -622,8 +833,6 @@ class FuncionarioGeraisAPIView(generics.ListAPIView):
         return None  # padrão SEM paginação
 
 
-# views.py
-# views.py
 class FuncionarioAdminDetail(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
     serializer_class = FuncionarioAllModelSerializer
@@ -833,204 +1042,203 @@ class FuncionarioRotasRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestro
     permission_classes = [IsAuthenticated, UsuarioIndependenteOuAdmin]
 
 
-'''
-    SOMENTE PARA ADMINISTRADORES
-'''
-
-
-@extend_schema(exclude=True)
-class EmpresaAdminDetailAPIView(APIView):
-    """
-    GET  → Lista todos os dados (empresa, usuário, funcionário, segmentos, sistema)
-    PUT  → Atualiza tudo (empresa, usuário, funcionário, segmentos)
-    PATCH → Atualização parcial
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, pk):
-        user = self.get_user(pk)
-        empresa = self.get_empresa(user.id)
-
-        serializer = EmpresaAdminDetailSerializer(
-            instance=empresa,
-            context={'request': request}
-        )
-        return Response(serializer.data)
-
-    def put(self, request, pk):
-        user = self.get_user(pk)
-        empresa = self.get_empresa(user.id)
-
-        serializer = CriacaoEmpresaFuncionarioSerializer(
-            instance=empresa,
-            data=request.data,
-            context={'request': request},
-            partial=False
-        )
-
-        if serializer.is_valid():
-            return Response(serializer.save())
-
-        return Response(serializer.errors, status=400)
-
-    def patch(self, request, pk):
-        user = self.get_user(pk)
-        empresa = self.get_empresa(user.id)
-
-        serializer = CriacaoEmpresaFuncionarioSerializer(
-            instance=empresa,
-            data=request.data,
-            context={'request': request},
-            partial=True
-        )
-
-        if serializer.is_valid():
-            return Response(serializer.save())
-
-        return Response(serializer.errors, status=400)
-
-    def get_user(self, pk):
-        try:
-            return User.objects.get(pk=pk)
-        except User.DoesNotExist:
-            raise NotFound('Usuário não encontrado')
-
-    def get_empresa(self, user_id):
-        empresa = Empresa.objects.select_related(
-            'categoria',
-            'sistema',
-            'matriz_filial'
-        ).filter(usuario__id=user_id).first()
-
-        if not empresa:
-            raise NotFound('Empresa não encontrada para este usuário')
-
-        return empresa
-
-
+# SOMENTE PARA ADMINISTRADORES
 @extend_schema(exclude=True)
 class CriarEmpresaAdminAPIView(APIView):
+    """
+    API para criar ou atualizar empresa via admin
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        # Converte para dict para facilitar
-        data_dict = dict(request.data.lists())
+        # Prepara os dados
+        data = request.data.copy()
 
-        # ======================================
-        # PROCESSAMENTO DOS DADOS
-        # ======================================
-        processed_data = {}
+        # Processa arquivo de certificado
+        if request.FILES.get('certificado_file'):
+            data['certificado_file'] = request.FILES['certificado_file']
 
-        for key, values in data_dict.items():
-            # SEGMENTOS - FORMATOS ESPERADOS:
-            # 1. segmentos[] = [1, 2, 3] (Postman/Frontend padrão)
-            # 2. segmentos = "1,2,3" (string com vírgulas)
-            # 3. segmentos = "[1,2,3]" (JSON string)
+        # Processa documento (limpa caracteres)
+        if data.get('documento'):
+            import re
+            data['documento'] = re.sub(r'[^0-9]', '', str(data['documento']))
 
-            if 'segment' in key.lower():
-                segmentos_list = []
+        # Converte sistemas_ids
+        if data.get('sistemas_ids') and isinstance(data['sistemas_ids'], str):
+            try:
+                import json
+                data['sistemas_ids'] = json.loads(data['sistemas_ids'])
+            except Exception:
+                data['sistemas_ids'] = [int(x.strip()) for x in data['sistemas_ids'].split(',') if x.strip()]
 
-                for value in values:
-                    if value is not None and str(value).strip():
-                        value_str = str(value).strip()
+        # Converte funcionarios
+        if data.get('funcionarios') and isinstance(data['funcionarios'], str):
+            try:
+                import json
+                data['funcionarios'] = json.loads(data['funcionarios'])
+            except Exception:
+                data['funcionarios'] = []
 
-                        # Tenta como JSON
-                        if (value_str.startswith('[') and value_str.endswith(']')):
-                            try:
-                                import json
-                                json_list = json.loads(value_str)
-                                if isinstance(json_list, list):
-                                    for item in json_list:
-                                        try:
-                                            segmentos_list.append(int(item))
-                                        except (ValueError, TypeError):
-                                            print(f"Item inválido no JSON: {item}")
-                            except json.JSONDecodeError:
-                                print(f"JSON inválido: {value_str}")
+        # Converte conexao_banco
+        if data.get('conexao_banco') and isinstance(data['conexao_banco'], str):
+            try:
+                import json
+                data['conexao_banco'] = json.loads(data['conexao_banco'])
+            except Exception:
+                data['conexao_banco'] = None
 
-                        # Tenta como string com vírgulas
-                        elif ',' in value_str:
-                            parts = value_str.split(',')
-                            for part in parts:
-                                part = part.strip()
-                                if part:
-                                    try:
-                                        segmentos_list.append(int(part))
-                                    except ValueError:
-                                        print(f"Parte inválida: {part}")
+        # Determina se é update ou create
+        instance = None
+        if data.get('empresa_id'):
+            try:
+                from empresa.models import Empresa
+                instance = Empresa.objects.get(id=data['empresa_id'])
+            except Empresa.DoesNotExist:
+                pass
 
-                        # Tenta como número simples
-                        else:
-                            try:
-                                segmentos_list.append(int(value_str))
-                            except ValueError:
-                                print(f"Valor não numérico: {value_str}")
-
-                # Remove duplicatas e ordena
-                if segmentos_list:
-                    segmentos_list = sorted(list(set(segmentos_list)))
-
-                processed_data['segmentos'] = segmentos_list
-
-            # Campos do tipo empresa[campo]
-            elif key.startswith('empresa[') and key.endswith(']'):
-                campo = key[8:-1]  # Extrai o nome do campo
-                processed_data[campo] = values[0] if len(values) == 1 else values
-
-            # Campos simples (único valor)
-            elif len(values) == 1:
-                processed_data[key] = values[0] if values[0] not in ['', None] else None
-
-            # Campos com múltiplos valores
-            else:
-                processed_data[key] = values
-
-        # Garante que segmentos existe
-        if 'segmentos' not in processed_data:
-            processed_data['segmentos'] = []
-
-        # ======================================
-        # CONVERSÃO DE TIPOS
-        # ======================================
-        # Booleanos
-        bool_fields = ['is_admin', 'is_branch', 'is_staff', 'is_active', 'criar_banco']
-        for field in bool_fields:
-            if field in processed_data:
-                old = processed_data[field]
-                if isinstance(old, str):
-                    processed_data[field] = old.lower() in ['true', '1', 'yes', 't', 'y']
-
-        # Inteiros
-        int_fields = ['status', 'categoria', 'sistema', 'matriz_filial',
-                      'empresa_id', 'max_funcionarios_registros']
-        for field in int_fields:
-            if field in processed_data and processed_data[field] not in [None, '']:
-                try:
-                    old = processed_data[field]
-                    processed_data[field] = int(processed_data[field])
-                except (ValueError, TypeError) as e:
-                    print(f"Erro ao converter {field}: {e}")
-                    processed_data[field] = None
-
-        serializer = CriacaoEmpresaFuncionarioSerializer(
-            data=processed_data,
+        serializer = EmpresaAdminSerializer(
+            instance=instance,
+            data=data,
             context={'request': request}
         )
 
         if serializer.is_valid():
-            try:
-                resultado = serializer.save()
-                return Response(resultado, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                return Response(
-                    {
-                        'error': 'Erro interno no servidor.',
-                        'detail': str(e),
-                        'traceback': traceback.format_exc()
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            result = serializer.save()
+            return Response(result, status=status.HTTP_200_OK if instance else status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(exclude=True)
+class DeletarEmpresaAdminAPIView(APIView):
+    """
+    API para deletar empresa via admin
+    - Remove todos os vínculos da empresa
+    - Desativa funcionários (exceto o admin/dono)
+    - Remove arquivo de certificado
+    - Remove conexões com banco
+    - Remove vínculos com sistemas
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, *args, **kwargs):
+        empresa_id = request.data.get('empresa_id') or kwargs.get('empresa_id')
+
+        if not empresa_id:
+            return Response(
+                {'error': 'empresa_id é obrigatório.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            empresa = Empresa.objects.get(id=empresa_id)
+        except Empresa.DoesNotExist:
+            return Response(
+                {'error': 'Empresa não encontrada.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Verifica permissão
+        user = request.user
+        if not user.is_superuser:
+            return Response(
+                {'error': 'Apenas superusuários podem deletar empresas.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        with transaction.atomic():
+            resultado = {
+                'empresa_id': empresa.id,
+                'razao_social': empresa.razao_social,
+                'acoes': []
+            }
+
+            # 1. Remove o arquivo de certificado se existir
+            if empresa.file and empresa.file.name:
+                try:
+                    if default_storage.exists(empresa.file.name):
+                        default_storage.delete(empresa.file.name)
+                        resultado['acoes'].append(f"Arquivo removido: {empresa.file.name}")
+                except Exception as e:
+                    resultado['acoes'].append(f"Erro ao remover arquivo: {str(e)}")
+
+            # 2. Remove conexão com banco de dados
+            conexao_banco = ConexaoBanco.objects.filter(empresa=empresa).first()
+            if conexao_banco:
+                conexao_banco.delete()
+                resultado['acoes'].append("Conexão com banco de dados removida")
+
+            # 3. Remove vínculos com sistemas
+            sistemas_vinculados = EmpresaSistema.objects.filter(empresa=empresa)
+            qtd_sistemas = sistemas_vinculados.count()
+            sistemas_vinculados.delete()
+            resultado['acoes'].append(f"{qtd_sistemas} vínculo(s) de sistema(s) removido(s)")
+
+            # 4. Desativa funcionários (exceto o admin/dono)
+            funcionarios = Funcionario.objects.filter(empresa=empresa)
+            admin_user = empresa.usuario
+            funcionarios_desativados = 0
+
+            for funcionario in funcionarios:
+                if funcionario.user.id != admin_user.id:
+                    # Desativa o usuário
+                    user_func = funcionario.user
+                    if user_func.is_active:
+                        user_func.is_active = False
+                        user_func.save()
+                        funcionarios_desativados += 1
+                    # Remove o vínculo do funcionário
+                    funcionario.delete()
+
+            resultado['acoes'].append(f"{funcionarios_desativados} funcionário(s) desativado(s) e desvinculado(s)")
+
+            # 5. Remove filiais (se existirem)
+            filiais = Empresa.objects.filter(matriz_filial=empresa)
+            qtd_filiais = filiais.count()
+
+            for filial in filiais:
+                # Remove arquivos das filiais
+                if filial.file and filial.file.name:
+                    try:
+                        if default_storage.exists(filial.file.name):
+                            default_storage.delete(filial.file.name)
+                    except Exception:
+                        pass
+
+                # Remove conexões das filiais
+                ConexaoBanco.objects.filter(empresa=filial).delete()
+
+                # Remove vínculos de sistemas das filiais
+                EmpresaSistema.objects.filter(empresa=filial).delete()
+
+                # Desativa funcionários das filiais
+                for func in Funcionario.objects.filter(empresa=filial):
+                    if func.user.id != filial.usuario.id:
+                        user_func = func.user
+                        if user_func.is_active:
+                            user_func.is_active = False
+                            user_func.save()
+                    func.delete()
+
+                # Deleta a filial
+                filial.delete()
+
+            if qtd_filiais > 0:
+                resultado['acoes'].append(f"{qtd_filiais} filial(is) removida(s)")
+
+            # 6. Remove histórico NSU (se existir)
+            from empresa.models import HistoricoNSU
+            historicos = HistoricoNSU.objects.filter(empresa=empresa)
+            qtd_historicos = historicos.count()
+            historicos.delete()
+
+            if qtd_historicos > 0:
+                resultado['acoes'].append(f"{qtd_historicos} registro(s) de histórico removido(s)")
+
+            # 7. Por fim, deleta a empresa
+            empresa.delete()
+            resultado['acoes'].append("Empresa deletada com sucesso")
+            resultado['success'] = True
+            resultado['message'] = f"Empresa '{resultado['razao_social']}' foi deletada com sucesso."
+
+            return Response(resultado, status=status.HTTP_200_OK)

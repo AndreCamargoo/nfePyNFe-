@@ -8,12 +8,12 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 """
 
 import os
+from celery.schedules import crontab
 from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from celery.schedules import crontab
 
 API_USERNAME = os.getenv('API_USERNAME')
 API_PASSWORD = os.getenv('API_PASSWORD')
@@ -124,6 +124,8 @@ CORS_ALLOW_HEADERS = [
     'accept',
     'origin',
     'user-agent',
+    'cookie',
+    'set-cookie',
 ]
 
 # Métodos HTTP permitidos para CORS
@@ -161,6 +163,7 @@ INSTALLED_APPS = [
     'rest_framework',
     # Simplejwt
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     # Documentação
     'drf_spectacular',
     # Apps
@@ -172,14 +175,15 @@ INSTALLED_APPS = [
     'nfe_resumo',
     'apexcharts',
 
+    # App para controlar migracoes de banco empresas allnube
+    'db_allnube_empresa',
+
     # Global
     'empresa',
     'sistema',
 
-    # Cloud Azevedo
-
-    # App para controlar migracoes de banco empresas allnube
-    'db_allnube_empresa',
+    # Azevedo Cloud
+    'azevedo_cloud',
 
     # Leads
     'leads_api',
@@ -197,7 +201,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'app.core.middleware.CurrentUserMiddleware',
+    'app.core.middleware.CookieAuthenticationMiddleware',
 ]
 
 ROOT_URLCONF = 'app.urls'
@@ -222,7 +226,7 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # ==================== DATABASE ====================
 
 """
- Quando configurado, direciona automaticamente as queries para o banco correto baseado no modelo sendo acessado.
+Quando configurado, direciona automaticamente as queries para o banco correto baseado no modelo sendo acessado.
 """
 DATABASE_ROUTERS = []
 
@@ -336,6 +340,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=2),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 # ==================== CUSTOM SETTINGS ====================

@@ -204,17 +204,38 @@ class ConexaoBanco(models.Model):
 
 
 class Funcionario(models.Model):
+    # Geral
     ADMIN = 'admin'
-    FUNCIONARIO = 'funcionario'
+    CLIENTE = 'cliente'
+
+    # Azevedo Cloud
+    AUDITOR = 'auditor'
+    ADMINISTRATIVO = 'administrativo'
+    ESTAGIARIO = 'estagiario'
+    CLIENTE_EXTERNO = 'cliente_externo'
+
+    # CARGOS GERAIS
+    SECRETARIA = 'secretaria'
+    FINANCEIRO = 'financeiro'
+    AUXILIAR_GERAL = 'auxiliar_geral'
 
     ROLE_CHOICES = [
         (ADMIN, 'Administrador'),
-        (FUNCIONARIO, 'Funcionário'),
+        (CLIENTE, 'Cliente'),
+
+        (AUDITOR, 'Auditor'),
+        (ADMINISTRATIVO, 'Administrativo'),
+        (ESTAGIARIO, 'Estagiário'),
+        (CLIENTE_EXTERNO, 'Cliente Externo'),
+
+        (SECRETARIA, 'Secretaria'),
+        (FINANCEIRO, 'Financeiro'),
+        (AUXILIAR_GERAL, 'Auxiliar geral'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='funcionarios')
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='funcionarios_empresa')
-    role = models.CharField(max_length=15, choices=ROLE_CHOICES)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     status = models.CharField(max_length=1, choices=STATUS_CHOICES)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)

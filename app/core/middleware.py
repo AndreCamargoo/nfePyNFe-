@@ -1,5 +1,6 @@
-import threading
+from django.utils.deprecation import MiddlewareMixin
 
+import threading
 _thread_locals = threading.local()
 
 
@@ -15,3 +16,20 @@ class CurrentUserMiddleware:
         _thread_locals.user = request.user
         response = self.get_response(request)
         return response
+
+
+class CookieAuthenticationMiddleware(MiddlewareMixin):
+    """
+    Middleware para extrair token JWT do cookie HttpOnly
+    e adicionar ao header Authorization para o DRF funcionar
+    """
+
+    def process_request(self, request):
+        # Extrair token do cookie
+        access_token = request.COOKIES.get('access_token')
+
+        if access_token:
+            # Adicionar ao header Authorization para o DRF funcionar
+            request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
+            # Opcional: adicionar um atributo ao request para saber que veio do cookie
+            request.token_from_cookie = True

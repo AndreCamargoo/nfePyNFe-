@@ -1,4 +1,7 @@
+import os
 import re
+
+from django.core.files.storage import default_storage
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -946,6 +949,428 @@ class CriacaoEmpresaFuncionarioSerializer(serializers.Serializer):
             'user_id': user.id,
             'message': 'Dados atualizados com sucesso'
         }
+
+
+class EmpresaDetalhesVinculadasSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    razao_social = serializers.CharField()
+    documento = serializers.CharField()
+    ie = serializers.CharField(allow_null=True)
+    uf = serializers.CharField()
+    status = serializers.CharField()
+    tipo = serializers.CharField()
+    categoria = serializers.DictField(allow_null=True)
+    sistemas = serializers.ListField()  # Mudado de 'sistema' para 'sistemas'
+    sistemas_ids = serializers.ListField()  # Adicionado
+    matriz = serializers.DictField(allow_null=True)
+    filiais = serializers.ListField()
+    conexao_banco = serializers.DictField(allow_null=True)
+    funcionarios = serializers.ListField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+class EmpresaAdminSerializer(serializers.Serializer):
+    """
+    Serializer para criação/atualização de empresa via admin
+    """
+    # Dados do usuário admin
+    username = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+
+    # Usuário existente (obrigatório para criação)
+    usuario_id = serializers.IntegerField(required=False, allow_null=True)
+
+    # Controle da operação
+    empresa_id = serializers.IntegerField(required=False, allow_null=True)
+    tipo = serializers.CharField(required=False, default="MATRIZ")
+
+    # Dados da empresa
+    razao_social = serializers.CharField(required=False, allow_blank=True)
+    documento = serializers.CharField(required=False, allow_blank=True)
+    uf = serializers.CharField(required=False, allow_blank=True)
+    ie = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    status = serializers.CharField(required=False, default="1")
+    categoria_id = serializers.IntegerField(required=False, allow_null=True)
+    matriz_filial_id = serializers.IntegerField(required=False, allow_null=True)
+
+    # Sistemas
+    sistemas_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list
+    )
+
+    # Configurações
+    criar_banco = serializers.BooleanField(default=False)
+    max_funcionarios = serializers.IntegerField(default=1)
+    senha_certificado = serializers.CharField(required=False, allow_blank=True)
+
+    # Arquivo de certificado
+    certificado_file = serializers.FileField(required=False, allow_null=True)
+
+    # Conexão banco de dados
+    conexao_banco = serializers.DictField(required=False, allow_null=True)
+
+    # Funcionários adicionais
+    funcionarios = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        default=list
+    )
+
+    def _limpar_documento(self, valor):
+        """Remove caracteres especiais do documento, deixando apenas números"""
+        if not valor:
+            return valor
+        return re.sub(r'[^0-9]', '', str(valor))
+
+    def validate(self, attrs):
+        request = self.context['request']
+        user = request.user
+
+        # Verifica se é superuser
+        if not user.is_superuser:
+            raise serializers.ValidationError({'error': 'Apenas superusuários podem acessar esta funcionalidade.'})
+
+        # Limpa o documento se presente
+        if attrs.get('documento'):
+            attrs['documento'] = self._limpar_documento(attrs['documento'])
+
+        # Caso 1: Atualização de empresa existente
+        if attrs.get('empresa_id'):
+            try:
+                empresa = Empresa.objects.get(id=attrs['empresa_id'])
+                attrs['empresa_instance'] = empresa
+            except Empresa.DoesNotExist:
+                raise serializers.ValidationError({'error': 'Empresa não encontrada.'})
+
+        # Caso 2: Criação de nova empresa
+        else:
+            # Verifica campos obrigatórios para nova empresa
+            campos_obrigatorios = ['razao_social', 'documento', 'uf', 'categoria_id']
+            for campo in campos_obrigatorios:
+                if not attrs.get(campo):
+                    raise serializers.ValidationError({campo: 'Este campo é obrigatório para criação de empresa.'})
+
+            # Verifica se documento já existe
+            if Empresa.objects.filter(documento=attrs['documento']).exists():
+                raise serializers.ValidationError({'documento': 'Já existe uma empresa com este CNPJ.'})
+
+            # Verifica categoria
+            if not CategoriaEmpresa.objects.filter(id=attrs['categoria_id']).exists():
+                raise serializers.ValidationError({'categoria_id': 'Categoria não encontrada.'})
+
+            # Verifica se usuario_id foi enviado (para criação)
+            if not attrs.get('usuario_id'):
+                raise serializers.ValidationError({'usuario_id': 'usuario_id é obrigatório para criar uma nova empresa.'})
+
+            # Verifica se o usuário existe
+            try:
+                admin_user = User.objects.get(id=attrs['usuario_id'])
+                attrs['admin_user'] = admin_user
+            except User.DoesNotExist:
+                raise serializers.ValidationError({'usuario_id': 'Usuário não encontrado.'})
+
+        return attrs
+
+    def _vincular_sistemas(self, empresa, sistemas_ids, max_funcionarios, criar_banco):
+        """Vincula múltiplos sistemas à empresa"""
+        # Remove sistemas que não estão mais na lista
+        EmpresaSistema.objects.filter(empresa=empresa).exclude(
+            sistema_id__in=sistemas_ids
+        ).delete()
+
+        # Adiciona ou atualiza sistemas
+        for sistema_id in sistemas_ids:
+            try:
+                sistema = Sistema.objects.get(id=sistema_id)
+            except Sistema.DoesNotExist:
+                continue
+
+            obj, created = EmpresaSistema.objects.get_or_create(
+                empresa=empresa,
+                sistema=sistema,
+                defaults={
+                    'max_funcionarios_registros': max_funcionarios,
+                    'criar_banco': criar_banco,
+                    'ativo': True
+                }
+            )
+            if not created:
+                obj.max_funcionarios_registros = max_funcionarios
+                obj.criar_banco = criar_banco
+                obj.save()
+
+            # Atualiza o campo 'sistema' da empresa para o primeiro sistema (compatibilidade)
+            if empresa.sistema is None:
+                empresa.sistema = sistema
+                empresa.save()
+
+    def _desativar_usuario(self, user):
+        """Desativa um usuário (is_active=False)"""
+        if user and user.is_active:
+            user.is_active = False
+            user.save()
+
+    def _criar_ou_atualizar_funcionarios(self, empresa, funcionarios_list, usuario_admin):
+        """Cria ou atualiza funcionários da empresa"""
+        funcionarios_ids_atual = set()
+
+        # SEMPRE mantém o administrador principal
+        funcionarios_ids_atual.add(usuario_admin.id)
+
+        for func_data in funcionarios_list:
+            username = func_data.get('username')
+            email = func_data.get('email')
+            role = func_data.get('role', 'cliente')
+            status = func_data.get('status', '1')
+            password = func_data.get('password', '123456')
+
+            # Se tem ID, atualiza existente
+            if func_data.get('id'):
+                try:
+                    funcionario = Funcionario.objects.get(id=func_data['id'], empresa=empresa)
+                    # Não permite remover o admin via ID
+                    if funcionario.user.id == usuario_admin.id:
+                        continue
+
+                    funcionario.role = role
+                    funcionario.status = str(status)
+                    funcionario.save()
+                    funcionarios_ids_atual.add(funcionario.user.id)
+
+                    # Atualiza dados do usuário
+                    user = funcionario.user
+                    if username:
+                        user.username = username
+                    if email:
+                        user.email = email
+                    if password:
+                        user.set_password(password)
+                    # Reativa o usuário se necessário
+                    if not user.is_active:
+                        user.is_active = True
+                    user.save()
+                    continue
+                except Funcionario.DoesNotExist:
+                    pass
+
+            # Cria novo funcionário (apenas se tiver username e email)
+            if username and email:
+                # Verifica se usuário já existe (inclusive desativado)
+                user = None
+                if User.objects.filter(username=username).exists():
+                    user = User.objects.get(username=username)
+                elif User.objects.filter(email=email).exists():
+                    user = User.objects.get(email=email)
+
+                if user:
+                    # Reativa o usuário se estiver desativado
+                    if not user.is_active:
+                        user.is_active = True
+                        user.save()
+                else:
+                    # Cria novo usuário
+                    user = User.objects.create_user(
+                        username=username,
+                        email=email,
+                        password=password,
+                        first_name=username,
+                        last_name='',
+                        is_active=True
+                    )
+
+                # Verifica se já não é funcionário desta empresa
+                if not Funcionario.objects.filter(user=user, empresa=empresa).exists():
+                    funcionario = Funcionario.objects.create(
+                        user=user,
+                        empresa=empresa,
+                        role=role,
+                        status=str(status)
+                    )
+                    funcionarios_ids_atual.add(user.id)
+
+        # Remove funcionários que não estão mais na lista (exceto o admin)
+        funcionarios_para_remover = Funcionario.objects.filter(
+            empresa=empresa
+        ).exclude(
+            user_id__in=funcionarios_ids_atual
+        )
+
+        for func in funcionarios_para_remover:
+            # Desativa o usuário, não deleta
+            self._desativar_usuario(func.user)
+            func.delete()
+
+    def _criar_conexao_banco(self, empresa, conexao_data):
+        """Cria ou atualiza conexão com banco de dados"""
+        if not conexao_data:
+            return
+
+        conexao, created = ConexaoBanco.objects.get_or_create(empresa=empresa)
+
+        if conexao_data.get('host'):
+            conexao.set_host(conexao_data['host'])
+        if conexao_data.get('porta'):
+            conexao.set_porta(conexao_data['porta'])
+        if conexao_data.get('database'):
+            conexao.set_database(conexao_data['database'])
+        if conexao_data.get('usuario'):
+            conexao.set_usuario(conexao_data['usuario'])
+        if conexao_data.get('senha'):
+            conexao.set_senha(conexao_data['senha'])
+
+        conexao.status = True
+        conexao.save()
+
+    def create(self, validated_data):
+        """Cria nova empresa com usuário existente"""
+        with transaction.atomic():
+            # 1. Pega o usuário admin existente
+            admin_user = validated_data['admin_user']
+
+            # 2. Cria empresa
+            categoria = CategoriaEmpresa.objects.get(id=validated_data['categoria_id'])
+
+            empresa = Empresa.objects.create(
+                usuario=admin_user,
+                razao_social=validated_data['razao_social'],
+                documento=validated_data['documento'],
+                uf=validated_data['uf'],
+                ie=validated_data.get('ie', ''),
+                senha=validated_data.get('senha_certificado', ''),
+                categoria=categoria,
+                status=validated_data.get('status', '1'),
+            )
+
+            # 3. Salva arquivo de certificado se enviado
+            if validated_data.get('certificado_file'):
+                empresa.file = validated_data['certificado_file']
+                empresa.save()
+
+            # 4. Vincula sistemas
+            sistemas_ids = validated_data.get('sistemas_ids', [])
+            max_funcionarios = validated_data.get('max_funcionarios', 1)
+            criar_banco = validated_data.get('criar_banco', False)
+            self._vincular_sistemas(empresa, sistemas_ids, max_funcionarios, criar_banco)
+
+            # 5. Cria conexão banco (se solicitado)
+            if criar_banco and validated_data.get('conexao_banco'):
+                self._criar_conexao_banco(empresa, validated_data['conexao_banco'])
+
+            # 6. Cria funcionários adicionais
+            funcionarios_list = validated_data.get('funcionarios', [])
+            self._criar_ou_atualizar_funcionarios(empresa, funcionarios_list, admin_user)
+
+            return {
+                'success': True,
+                'message': 'Empresa criada com sucesso!',
+                'empresa_id': empresa.id,
+                'razao_social': empresa.razao_social,
+                'usuario_id': admin_user.id,
+                'username': admin_user.username
+            }
+
+    def update(self, instance, validated_data):
+        """Atualiza empresa existente"""
+        empresa = validated_data.get('empresa_instance', instance)
+
+        with transaction.atomic():
+            # 1. Atualiza dados da empresa
+            if validated_data.get('razao_social'):
+                empresa.razao_social = validated_data['razao_social']
+            if validated_data.get('documento'):
+                empresa.documento = validated_data['documento']
+            if validated_data.get('uf'):
+                empresa.uf = validated_data['uf']
+            if validated_data.get('ie') is not None:
+                empresa.ie = validated_data['ie']
+            if validated_data.get('status'):
+                empresa.status = validated_data['status']
+            if validated_data.get('categoria_id'):
+                empresa.categoria = CategoriaEmpresa.objects.get(id=validated_data['categoria_id'])
+            if validated_data.get('senha_certificado'):
+                empresa.senha = validated_data['senha_certificado']
+
+            # 2. Gerencia o arquivo de certificado
+            novo_arquivo = validated_data.get('certificado_file')
+
+            if novo_arquivo:
+                # Deleta o arquivo anterior se existir
+                if empresa.file and empresa.file.name:
+                    try:
+                        # Caminho completo do arquivo
+                        file_path = empresa.file.path
+
+                        # Verifica se o arquivo existe antes de tentar deletar
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                            # print(f"Arquivo anterior removido: {file_path}")
+                        else:
+                            # print(f"Arquivo anterior não encontrado: {file_path}")
+                            pass
+                    except Exception:
+                        # print(f"Erro ao remover arquivo anterior: {e}")
+                        pass
+
+                # Salva o novo arquivo
+                empresa.file = novo_arquivo
+                # print(f"Novo arquivo salvo: {empresa.file.name}")
+
+            empresa.save()
+
+            # 3. Atualiza sistemas
+            sistemas_ids = validated_data.get('sistemas_ids', [])
+            max_funcionarios = validated_data.get('max_funcionarios', 1)
+            criar_banco = validated_data.get('criar_banco', False)
+            self._vincular_sistemas(empresa, sistemas_ids, max_funcionarios, criar_banco)
+
+            # 4. Atualiza conexão banco
+            if criar_banco and validated_data.get('conexao_banco'):
+                self._criar_conexao_banco(empresa, validated_data['conexao_banco'])
+            elif not criar_banco:
+                # Se não quer mais criar banco, desativa a conexão
+                ConexaoBanco.objects.filter(empresa=empresa).update(status=False)
+
+            # 5. Atualiza funcionários
+            funcionarios_list = validated_data.get('funcionarios', [])
+            admin_user = empresa.usuario
+            self._criar_ou_atualizar_funcionarios(empresa, funcionarios_list, admin_user)
+
+            return {
+                'success': True,
+                'message': 'Empresa atualizada com sucesso!',
+                'empresa_id': empresa.id,
+                'razao_social': empresa.razao_social
+            }
+
+
+class EmpresaDeleteSerializer(serializers.Serializer):
+    """
+    Serializer para deletar empresa e desativar vínculos
+    """
+    empresa_id = serializers.IntegerField()
+
+    def validate_empresa_id(self, value):
+        try:
+            empresa = Empresa.objects.get(id=value)
+            return empresa
+        except Empresa.DoesNotExist:
+            raise serializers.ValidationError("Empresa não encontrada.")
+
+    def validate(self, attrs):
+        request = self.context['request']
+        user = request.user
+
+        # Verifica se é superuser
+        if not user.is_superuser:
+            raise serializers.ValidationError({'error': 'Apenas superusuários podem deletar empresas.'})
+
+        return attrs
 
 
 # Alias para manter compatibilidade se necessário

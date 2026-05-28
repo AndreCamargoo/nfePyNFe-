@@ -4,11 +4,13 @@ def remove_specific_paths(endpoints, **kwargs):
     """
     allowed_views = {
         # Autenticação
-        'CustomTokenObtainPairView', 'CustomTokenRefreshView', 'CustomTokenVerifyView', 'UserProfileCreateView',
-        'PasswordResetRequestAPIView', 'PasswordResetConfirmAPIView',
+        'CustomTokenObtainAPIView', 'CustomTokenRefreshAPIView', 'LogoutView',
 
-        # Autenticaçao Perfil
-        'UserProfileView', 'UserUpdateProfile',
+        # Gestão de usuários
+        'UserProfileCreateView', 'PasswordResetRequestAPIView', 'PasswordResetConfirmAPIView',
+
+        # Perfil
+        'UserProfileView', 'UserUpdateProfile', 'UserPermissionsView',
 
         # Sistemas
         'SistemaListCreateAPIView',
@@ -35,24 +37,25 @@ def remove_specific_paths(endpoints, **kwargs):
         'GrupoRotaSistemaListCreateAPIView', 'GrupoRotaSistemaRetrieveUpdateDestroyAPIView',
 
         # Notas fiscais completas
-        'NfeListCreateAPIView', 'ProcessarLoteNFeAPIView', 'GerarDanfeAPIView', 'NfeListMatrizAPIView', 'NfeListFilialAPIView', 'NfeRetrieveUpdateDestroyAPIView',
+        'NfeListCreateAPIView', 'ProcessarLoteNFeAPIView', 'GerarDanfeAPIView',
+        'NfeListMatrizAPIView', 'NfeListFilialAPIView', 'NfeRetrieveUpdateDestroyAPIView',
 
         # Notas fisica (produtos)
-        'NfeTodosProdutosListAPIView', 'NfeProdutosMatrizListAPIView', 'NfeProdutosFilialListAPIView', 'NfeProdutoRetrieveAPIView',
+        'NfeTodosProdutosListAPIView', 'NfeProdutosMatrizListAPIView',
+        'NfeProdutosFilialListAPIView', 'NfeProdutoRetrieveAPIView',
 
         # Nota fiscal (fornecedores)
-        'NfeTodosFornecedorListAPIView', 'NfeFornecedorMatrizListAPIView', 'NfeFornecedorFilialListAPIView', 'NfeFornecedorRetrieveAPIView',
+        'NfeTodosFornecedorListAPIView', 'NfeFornecedorMatrizListAPIView',
+        'NfeFornecedorFilialListAPIView', 'NfeFornecedorRetrieveAPIView',
     }
 
     filtered_endpoints = []
 
     for path, path_regex, method, callback in endpoints:
-
         # Verifica se é uma view que queremos documentar
         view_name = getattr(callback, 'cls').__name__ if hasattr(callback, 'cls') else None
-        if view_name not in allowed_views:
-            continue
 
-        filtered_endpoints.append((path, path_regex, method, callback))
+        if view_name in allowed_views:
+            filtered_endpoints.append((path, path_regex, method, callback))
 
     return filtered_endpoints

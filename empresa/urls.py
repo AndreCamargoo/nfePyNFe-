@@ -21,6 +21,8 @@ urlpatterns = [
     path('funcionarios/rotas/', views.FuncionarioRotasListCreateAPIView.as_view(), name='funcionario-rotas-create-list'),
     path('funcionario/rota/<int:pk>/', views.FuncionarioRotasRetrieveUpdateDestroyAPIView.as_view(), name='funcionario-rota-detail-view'),
 
-    path('empresa/create-admin/<int:pk>/', views.EmpresaAdminDetailAPIView.as_view(), name='empresa-admin-detail'),
-    path('empresa/create-admin/', views.CriarEmpresaAdminAPIView.as_view(), name='empresa-create-admin'),
+    # Admin
+    path('empresa/crete-update-user-empresa-admin/', views.CriarEmpresaAdminAPIView.as_view(), name='crete-update-user-empresa-admin'),
+    path('empresa/detalhes/<int:pk>/', views.EmpresaDetalhesVinculadasAPIView.as_view(), name='empresa-detalhes-vinculadas'),
+    path('empresa/deletar/<int:empresa_id>/', views.DeletarEmpresaAdminAPIView.as_view(), name='deletar-empresa-admin'),
 ]

@@ -8,7 +8,7 @@ Este sistema permite autenticação para dois tipos de usuários:
 
 PROBLEMA:
 O Django REST Framework espera que request.user seja sempre um objeto do modelo User padrão,
-mas nossos funcionários estão em uma tabela customizada (UsuarioEmpresa). 
+mas nossos funcionários estão em uma tabela customizada (UsuarioEmpresa).
 
 SOLUÇÃO - USUÁRIO DUMMY:
 Criar um objeto User "dummy" (em memória) para funcionários que:
@@ -22,7 +22,6 @@ FLUXO:
 """
 
 from django.contrib.auth.models import User
-from acesso.models import UsuarioEmpresa
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
 
