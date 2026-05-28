@@ -179,7 +179,7 @@ class CustomTokenObtainAPIView(APIView):
             value=str(refresh.access_token),
             httponly=True,          # Impede acesso via JavaScript
             secure=is_secure,       # Só envia via HTTPS (False em desenvolvimento)
-            samesite='Lax',         # Protege contra CSRF
+            samesite='None',        # Protege contra CSRF Lax
             max_age=60 * 60 * 24,   # 24 horas
             path='/',
         )
@@ -190,7 +190,7 @@ class CustomTokenObtainAPIView(APIView):
             value=str(refresh),
             httponly=True,
             secure=is_secure,
-            samesite='Lax',
+            samesite='None',
             max_age=60 * 60 * 24 * 7,  # 7 dias
             path='/',
         )
@@ -243,7 +243,7 @@ class CustomTokenRefreshAPIView(APIView):
                 value=new_access_token,
                 httponly=True,
                 secure=is_secure,
-                samesite='Lax',
+                samesite='None', #Lax
                 max_age=60 * 60 * 24,
                 path='/',
             )
@@ -303,7 +303,7 @@ class LogoutView(APIView):
                     pass
 
             except Exception:
-                # print(f"❌ Erro ao invalidar access token: {e}")
+                # print(f"Erro ao invalidar access token: {e}")
                 pass
 
         # Invalidar refresh token
@@ -341,8 +341,8 @@ class LogoutView(APIView):
         )
 
         # Limpar cookies
-        response.delete_cookie('access_token', path='/')
-        response.delete_cookie('refresh_token', path='/')
+        response.delete_cookie('access_token', path='/', samesite='None')
+        response.delete_cookie('refresh_token', path='/', samesite='None')
 
         return response
 

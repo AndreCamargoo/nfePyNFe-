@@ -145,6 +145,10 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Para quando estiver atrás de proxy
     SESSION_COOKIE_SECURE = True  # Certifique-se de que os cookies são seguros (HTTPS)
     CSRF_COOKIE_SECURE = True  # CSRF também requer HTTPS
+
+    SESSION_COOKIE_SAMESITE = 'None'
+    CSRF_COOKIE_SAMESITE = 'None'
+
     SECURE_BROWSER_XSS_FILTER = True  # Protege contra ataques de XSS
     SECURE_CONTENT_TYPE_NOSNIFF = True  # Impede sniffing de tipo de conteúdo
     X_FRAME_OPTIONS = 'DENY'  # Evita que a página seja exibida em frames (clickjacking)
