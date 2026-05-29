@@ -71,19 +71,16 @@ class LeadSerializer(serializers.ModelSerializer):
     def _normalize_data(self, data):
         """
         Padroniza os dados:
-        - Tudo que é texto vira minúsculo.
-        - Campos de telefone e documento perdem a formatação (somente números).
+        - Campos numéricos (CNPJ, telefone, celular, CNES): apenas dígitos.
+        - Campos de texto: minúsculo, sem espaços nas pontas.
         """
-        # Lista de campos que devem conter apenas números
-        numeric_fields = ['cnpj', 'telefone', 'celular', 'telefone_contato']
+        numeric_fields = ['cnpj', 'cnes', 'telefone', 'celular', 'telefone_contato']
 
         for key, value in list(data.items()):
             if isinstance(value, str):
                 if key in numeric_fields:
-                    # Remove tudo que NÃO for número (0-9)
                     data[key] = re.sub(r'[^0-9]', '', value)
                 else:
-                    # Converte para minúsculo e tira espaços sobrando nas pontas
                     data[key] = value.strip().lower()
         return data
 

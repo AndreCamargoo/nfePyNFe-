@@ -401,11 +401,14 @@ class ImportService:
         updated = False
 
         razao_social = ImportService.normalize_string(row.get('Razao Social', ''))
-        if razao_social and lead.empresa != razao_social:
-            lead.empresa = razao_social[:500]
+        nome_conta = ImportService.normalize_string(row.get('Nome da conta', ''))
+
+        # Usa Razao Social como empresa; se ausente, usa Nome da conta como fallback
+        empresa_nova = razao_social or nome_conta
+        if empresa_nova and lead.empresa != empresa_nova:
+            lead.empresa = empresa_nova[:500]
             updated = True
 
-        nome_conta = ImportService.normalize_string(row.get('Nome da conta', ''))
         if nome_conta and lead.apelido != nome_conta:
             lead.apelido = nome_conta[:500]
             updated = True
