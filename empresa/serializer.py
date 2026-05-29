@@ -314,13 +314,13 @@ class FuncionarioListSerializer(serializers.ModelSerializer):
 
 
 class FuncionarioSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(write_only=True)
-    username = serializers.CharField(write_only=True)
-    password = serializers.CharField(write_only=True)
-    empresa_id = serializers.IntegerField(write_only=True)
-    first_name = serializers.CharField(write_only=True)
-    last_name = serializers.CharField(write_only=True)
-    sistema = serializers.CharField(write_only=True)
+    email = serializers.EmailField(write_only=True, required=False)
+    username = serializers.CharField(write_only=True, required=False)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    empresa_id = serializers.IntegerField(write_only=True, required=False)
+    first_name = serializers.CharField(write_only=True, required=False)
+    last_name = serializers.CharField(write_only=True, required=False)
+    sistema = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = Funcionario
@@ -430,6 +430,24 @@ class FuncionarioSerializer(serializers.ModelSerializer):
         instance.role = validated_data.get('role', instance.role)
         instance.status = validated_data.get('status', instance.status)
         instance.save()
+
+        # Atualiza campos do User vinculado
+        user = instance.user
+        changed = False
+        for field in ('first_name', 'last_name', 'email'):
+            val = validated_data.get(field)
+            if val is not None and getattr(user, field) != val:
+                setattr(user, field, val)
+                changed = True
+
+        password = validated_data.get('password', '')
+        if password:
+            user.set_password(password)
+            changed = True
+
+        if changed:
+            user.save()
+
         return instance
 
 
