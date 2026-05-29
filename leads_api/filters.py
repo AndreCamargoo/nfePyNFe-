@@ -93,7 +93,28 @@ class CnesFilter(django_filters.FilterSet):
     cidade = django_filters.CharFilter(field_name='cidade', lookup_expr='icontains')
     uf = django_filters.CharFilter(field_name='uf', lookup_expr='iexact')
     cnes = django_filters.CharFilter(field_name='cnes', lookup_expr='exact')
-    cpf_cnpj = django_filters.CharFilter(field_name='cpf_cnpj', lookup_expr='icontains')
+    cpf_cnpj = django_filters.CharFilter(method='filter_cpf_cnpj')
+
+    def filter_cpf_cnpj(self, queryset, name, value):
+        """Busca por CNPJ/CPF aceitando valor com ou sem formatação.
+
+        O banco pode armazenar '46.339.441/0001-13' enquanto o frontend envia
+        '46339441000113'. Normaliza ambos os lados para garantir o match.
+        """
+        clean = re.sub(r'[^0-9]', '', value)
+        q = Q(cpf_cnpj__icontains=value)
+        if clean:
+            # Formata como CNPJ (14 dígitos) para buscar no formato armazenado
+            if len(clean) == 14:
+                formatted = f"{clean[:2]}.{clean[2:5]}.{clean[5:8]}/{clean[8:12]}-{clean[12:14]}"
+                q |= Q(cpf_cnpj__iexact=formatted)
+            elif len(clean) == 11:
+                # CPF: XXX.XXX.XXX-XX
+                formatted = f"{clean[:3]}.{clean[3:6]}.{clean[6:9]}-{clean[9:11]}"
+                q |= Q(cpf_cnpj__iexact=formatted)
+            # Busca parcial com os dígitos limpos também (cobre formatos mistos)
+            q |= Q(cpf_cnpj__icontains=clean)
+        return queryset.filter(q)
     tipo_unidade = django_filters.CharFilter(field_name='tipo_unidade', lookup_expr='icontains')
 
     # Filtros numéricos
