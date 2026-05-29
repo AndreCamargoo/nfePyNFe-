@@ -10,10 +10,22 @@ class LeadsFilter(django_filters.FilterSet):
     q = django_filters.CharFilter(method='filter_by_q', label="Pesquisar")
 
     # Campos de texto
-    empresa = django_filters.CharFilter(field_name='empresa', lookup_expr='icontains')
     apelido = django_filters.CharFilter(field_name='apelido', lookup_expr='icontains')
     telefone = django_filters.CharFilter(method='filter_telefone')
-    cnpj = django_filters.CharFilter(field_name='cnpj', lookup_expr='icontains')
+    cnpj = django_filters.CharFilter(method='filter_cnpj')
+
+    def filter_cnpj(self, queryset, name, value):
+        """Aceita CNPJ com ou sem formatação — o banco armazena só dígitos."""
+        clean = re.sub(r'[^0-9]', '', value)
+        if clean:
+            return queryset.filter(cnpj__icontains=clean)
+        return queryset.filter(cnpj__icontains=value)
+
+    empresa = django_filters.CharFilter(method='filter_empresa')
+
+    def filter_empresa(self, queryset, name, value):
+        """Busca por nome da empresa OU apelido."""
+        return queryset.filter(Q(empresa__icontains=value) | Q(apelido__icontains=value))
     cidade = django_filters.CharFilter(field_name='cidade', lookup_expr='iexact')
     estado = django_filters.CharFilter(field_name='estado', lookup_expr='iexact')
     segmento = django_filters.CharFilter(field_name='segmento', lookup_expr='icontains')
