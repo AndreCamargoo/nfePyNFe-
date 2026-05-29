@@ -191,6 +191,7 @@ INSTALLED_APPS = [
 
     # Leads
     'leads_api',
+    'sorteio',
 
     # Celery gerenciamento em background
     'django_celery_results',

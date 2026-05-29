@@ -32,6 +32,9 @@ urlpatterns = [
     # Leads azevedo
     path('api/v1/', include('leads_api.urls')),
 
+    # Sorteio
+    path('api/v1/', include('sorteio.urls')),
+
     # YOUR PATTERNS
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Optional UI:
