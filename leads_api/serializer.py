@@ -87,6 +87,54 @@ class LeadSerializer(serializers.ModelSerializer):
                     data[key] = value.strip().lower()
         return data
 
+    def _find_existing_lead(self, cnpj=None, empresa=None):
+        """Busca lead existente por CNPJ ou nome da empresa (mesma lógica do ImportService)."""
+        if cnpj:
+            cnpj_limpo = re.sub(r'[^0-9]', '', cnpj)
+            if cnpj_limpo:
+                lead = Lead.objects.filter(cnpj=cnpj_limpo, deleted_at__isnull=True).first()
+                if lead:
+                    return lead
+
+        if empresa:
+            nome = empresa.strip().lower()
+            lead = Lead.objects.filter(empresa__iexact=nome, deleted_at__isnull=True).first()
+            if lead:
+                return lead
+            lead = Lead.objects.filter(apelido__iexact=nome, deleted_at__isnull=True).first()
+            if lead:
+                return lead
+
+        return None
+
+    def _upsert_contact(self, lead, contato_data, user=None):
+        """Adiciona ou atualiza contato vinculado ao lead (mesma lógica do ImportService)."""
+        email = contato_data.get('email', '')
+        nome = contato_data.get('nome', '')
+
+        if not email:
+            if nome and Contact.objects.filter(lead=lead, nome__iexact=nome, deleted_at__isnull=True).exists():
+                return
+            if user and user.is_authenticated:
+                contato_data['created_by'] = user
+            Contact.objects.create(lead=lead, **contato_data)
+            return
+
+        existing = Contact.objects.filter(lead=lead, email=email).first()
+        if existing:
+            updated = False
+            for field in ('nome', 'setor', 'celular', 'telefone_contato', 'email_extra'):
+                val = contato_data.get(field)
+                if val and getattr(existing, field) != val:
+                    setattr(existing, field, val)
+                    updated = True
+            if updated:
+                existing.save()
+        else:
+            if user and user.is_authenticated:
+                contato_data['created_by'] = user
+            Contact.objects.create(lead=lead, **contato_data)
+
     def create(self, validated_data):
         # 1. Padroniza os dados do Lead antes de processar
         validated_data = self._normalize_data(validated_data)
@@ -103,7 +151,24 @@ class LeadSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = request.user if request and hasattr(request, 'user') else None
 
-        # Cria o Lead
+        # 2. Verifica se já existe lead com mesmo CNPJ ou nome de empresa
+        lead = self._find_existing_lead(
+            cnpj=validated_data.get('cnpj'),
+            empresa=validated_data.get('empresa'),
+        )
+
+        if lead:
+            # Empresa já existe — apenas adiciona os contatos ao lead existente
+            for contato_data in contatos_data:
+                contato_data = self._normalize_data(contato_data)
+                self._upsert_contact(lead, contato_data, user)
+
+            if envio_email and origem_lp and contatos_data:
+                self._enviar_email_lead(lead, origem_lp, contatos_data[0], co_municip)
+
+            return lead
+
+        # 3. Empresa não existe — cria novo Lead
         lead = Lead.objects.create(**validated_data)
 
         # Define ManyToMany
@@ -112,18 +177,12 @@ class LeadSerializer(serializers.ModelSerializer):
 
         # Cria contatos
         for contato_data in contatos_data:
-            # 2. Padroniza os dados de cada Contato
             contato_data = self._normalize_data(contato_data)
-
-            if user and user.is_authenticated:
-                contato_data['created_by'] = user
-            Contact.objects.create(lead=lead, **contato_data)
+            self._upsert_contact(lead, contato_data, user)
 
         # Disparo de email apenas se marcado e origem_lp definido
         if envio_email and origem_lp and contatos_data:
-            # Pega apenas o primeiro contato
-            primeiro_contato = contatos_data[0]
-            self._enviar_email_lead(lead, origem_lp, primeiro_contato, co_municip)
+            self._enviar_email_lead(lead, origem_lp, contatos_data[0], co_municip)
 
         return lead
 
