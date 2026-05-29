@@ -207,6 +207,7 @@ class Funcionario(models.Model):
     # Geral
     ADMIN = 'admin'
     CLIENTE = 'cliente'
+    FUNCIONARIO = 'funcionario'
 
     # Azevedo Cloud
     AUDITOR = 'auditor'
@@ -222,6 +223,7 @@ class Funcionario(models.Model):
     ROLE_CHOICES = [
         (ADMIN, 'Administrador'),
         (CLIENTE, 'Cliente'),
+        (FUNCIONARIO, 'Funcionário'),
 
         (AUDITOR, 'Auditor'),
         (ADMINISTRATIVO, 'Administrativo'),
