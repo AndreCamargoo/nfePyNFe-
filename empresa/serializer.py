@@ -302,12 +302,14 @@ class ConexaoBancoModelSerializer(serializers.ModelSerializer):
 class FuncionarioListSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
     empresa_nome = serializers.CharField(source='empresa.razao_social', read_only=True)
     status = serializers.SerializerMethodField()
 
     class Meta:
         model = Funcionario
-        fields = ['id', 'username', 'email', 'empresa_nome', 'role', 'status']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'empresa_nome', 'role', 'status']
 
     def get_status(self, obj):
         return dict(STATUS_CHOICES).get(obj.status, 'Desconhecido')
