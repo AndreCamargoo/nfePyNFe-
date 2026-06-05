@@ -8,6 +8,10 @@ def get_current_user():
     return getattr(_thread_locals, 'user', None)
 
 
+def set_current_user(user):
+    _thread_locals.user = user
+
+
 class CurrentUserMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -21,15 +25,26 @@ class CurrentUserMiddleware:
 class CookieAuthenticationMiddleware(MiddlewareMixin):
     """
     Middleware para extrair token JWT do cookie HttpOnly
-    e adicionar ao header Authorization para o DRF funcionar
+    e adicionar ao header Authorization para o DRF funcionar.
+    Também autentica o usuário via JWT e define request.user e thread-local.
     """
 
     def process_request(self, request):
-        # Extrair token do cookie
         access_token = request.COOKIES.get('access_token')
 
         if access_token:
-            # Adicionar ao header Authorization para o DRF funcionar
             request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
-            # Opcional: adicionar um atributo ao request para saber que veio do cookie
             request.token_from_cookie = True
+
+            # Resolve request.user via DRF JWT agora, para que thread-local
+            # fique disponível durante o save() do AuditModel
+            try:
+                from rest_framework_simplejwt.authentication import JWTAuthentication
+                auth = JWTAuthentication()
+                result = auth.authenticate(request)
+                if result is not None:
+                    user, token = result
+                    request.user = user
+                    _thread_locals.user = user
+            except Exception:
+                pass

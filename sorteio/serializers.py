@@ -1,5 +1,13 @@
+import re
 from rest_framework import serializers
 from .models import EventoSorteio, ParticipanteSorteio
+
+
+def _clean_numeric(value):
+    """Remove qualquer caractere não numérico (./-  espaços etc.)"""
+    if not value:
+        return ''
+    return re.sub(r'[^0-9]', '', str(value))
 
 
 class EventoSorteioSerializer(serializers.ModelSerializer):
@@ -24,6 +32,26 @@ class ParticipanteSorteioSerializer(serializers.ModelSerializer):
             'cargo', 'codigo', 'vencedor', 'sorteado_em', 'created_at',
         ]
         read_only_fields = ['codigo', 'vencedor', 'sorteado_em']
+
+    def validate_cnpj(self, value):
+        return _clean_numeric(value)
+
+    def validate_cnes(self, value):
+        return _clean_numeric(value)
+
+    def validate_telefone(self, value):
+        return _clean_numeric(value)
+
+    def validate_empresa(self, value):
+        if not value:
+            return value
+        # Impede que um CNPJ/número seja salvo como nome da empresa
+        cleaned = value.strip()
+        if cleaned and re.match(r'^[\d.\-/\s]+$', cleaned):
+            raise serializers.ValidationError(
+                'O campo empresa não pode ser um CNPJ ou número. Informe o nome da instituição.'
+            )
+        return cleaned
 
     def validate(self, attrs):
         evento = attrs.get('evento')

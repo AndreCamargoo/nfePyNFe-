@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class ImportService:
 
-    DEFAULT_COMPANIES = ["numb3rs"]
-    DEFAULT_PRODUCTS = ["dbsaúde"]
+    DEFAULT_COMPANIES = ["sem registro"]
+    DEFAULT_PRODUCTS = ["sem produto"]
 
     @staticmethod
     def get_default_companies():
@@ -60,6 +60,14 @@ class ImportService:
             return ''
         cleaned = re.sub(r'[^0-9]', '', str(value))
         return cleaned
+
+    @staticmethod
+    def clean_phone(value):
+        """Pega o primeiro número de um campo que pode ter múltiplos separados por / | , ou espaços duplos."""
+        if not value:
+            return ''
+        first = re.split(r'\s*[/|,]\s*|\s{2,}', str(value).strip())[0]
+        return re.sub(r'[^0-9]', '', first)
 
     @staticmethod
     def detect_file_type(file):
@@ -149,7 +157,7 @@ class ImportService:
         return rows
 
     @staticmethod
-    def process_csv(file, duplicate=False, celery=True):
+    def process_csv(file, duplicate=False, celery=True, user_id=None):
         if celery:
             from leads_api.tasks import import_leads_csv_task
 
@@ -157,7 +165,7 @@ class ImportService:
             file_content = file.read()
             file_type = ImportService.detect_file_type(file)
 
-            task = import_leads_csv_task.delay(file_content, file.name, duplicate, file_type)
+            task = import_leads_csv_task.delay(file_content, file.name, duplicate, file_type, user_id=user_id)
 
             return {
                 "task_id": task.id,
@@ -323,9 +331,19 @@ class ImportService:
         sobrenome = ImportService.normalize_string(sobrenome) if sobrenome else ''
         cargo = ImportService.normalize_string(cargo) if cargo else ''
         email = ImportService.normalize_email(email) if email else ''
-        celular = ImportService.clean_numeric(celular) if celular else ''
-        telefone_contato = ImportService.clean_numeric(telefone_contato) if telefone_contato else ''
+        celular = ImportService.clean_phone(celular) if celular else ''
+        telefone_contato = ImportService.clean_phone(telefone_contato) if telefone_contato else ''
         email_extra = ImportService.normalize_email(email_extra) if email_extra else ''
+
+        # Fallback: se Celular e Telefone vieram vazios, tenta Conta: Telefone
+        # e decide o tipo pelo número de dígitos (11 = celular, 10 = fixo)
+        if not celular and not telefone_contato:
+            conta_tel = ImportService.clean_phone(row.get('Conta: Telefone', ''))
+            if conta_tel:
+                if len(conta_tel) == 11:
+                    celular = conta_tel
+                else:
+                    telefone_contato = conta_tel
 
         if primeiro_nome or sobrenome or email or celular or telefone_contato:
             nome_completo = ""
@@ -433,7 +451,7 @@ class ImportService:
 
         telefone = row.get('Conta: Telefone', '')
         if telefone:
-            telefone_limpo = ImportService.clean_numeric(telefone)
+            telefone_limpo = ImportService.clean_phone(telefone)
             if telefone_limpo and lead.telefone != telefone_limpo:
                 lead.telefone = telefone_limpo[:100]
                 updated = True

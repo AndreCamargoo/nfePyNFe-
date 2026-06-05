@@ -90,9 +90,6 @@ else:
 
         'https://moneyupgestao.com.br',
         'https://www.moneyupgestao.com.br',
-
-        'https://sorteio.azv.tec.br/',
-        'https://www.sorteio.azv.tec.br/',
     ]
     CORS_ALLOW_CREDENTIALS = True  # Permitir credenciais (por exemplo, cookies ou JWTs)
 
@@ -116,9 +113,6 @@ else:
 
         'https://moneyupgestao.com.br',
         'https://www.moneyupgestao.com.br',
-
-        'https://sorteio.azv.tec.br/',
-        'https://www.sorteio.azv.tec.br/',
     ]
 
 # Cabeçalhos permitidos para CORS

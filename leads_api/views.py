@@ -130,12 +130,27 @@ class LeadListCreateView(generics.ListCreateAPIView):
         context['request'] = self.request
         return context
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        user = self.request.user
+        if user and user.is_authenticated:
+            instance.created_by = user
+            instance.updated_by = user
+            instance.save(update_fields=['created_by', 'updated_by'])
+
 
 class LeadRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     # Garante que não acessa leads deletados via ID
     queryset = Lead.objects.filter(deleted_at__isnull=True)
     serializer_class = LeadSerializer
     permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        user = self.request.user
+        if user and user.is_authenticated:
+            instance.updated_by = user
+            instance.save(update_fields=['updated_by'])
 
     def perform_destroy(self, instance):
         # Soft Delete: Marca a data de exclusão e o usuário que deletou
@@ -742,7 +757,8 @@ class LeadImportView(APIView):
                 use_celery = False
 
             try:
-                result = ImportService.process_csv(file, False, celery=use_celery)
+                user_id = request.user.id if request.user.is_authenticated else None
+                result = ImportService.process_csv(file, False, celery=use_celery, user_id=user_id)
 
                 # Se usou Celery, registra o task_id para o usuário
                 if use_celery and 'task_id' in result:

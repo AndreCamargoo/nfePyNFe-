@@ -48,7 +48,7 @@ class ContactSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Contact
-        fields = ['id', 'nome', 'setor', 'email', 'email_extra', 'celular']
+        fields = ['id', 'nome', 'setor', 'email', 'email_extra', 'celular', 'telefone_contato']
 
 
 class LeadSerializer(serializers.ModelSerializer):
@@ -79,7 +79,9 @@ class LeadSerializer(serializers.ModelSerializer):
         for key, value in list(data.items()):
             if isinstance(value, str):
                 if key in numeric_fields:
-                    data[key] = re.sub(r'[^0-9]', '', value)
+                    # Pega apenas o primeiro número caso venham múltiplos separados por / | , espaços
+                    first = re.split(r'\s*[/|,]\s*|\s{2,}', value.strip())[0]
+                    data[key] = re.sub(r'[^0-9]', '', first)
                 else:
                     data[key] = value.strip().lower()
         return data
@@ -114,6 +116,7 @@ class LeadSerializer(serializers.ModelSerializer):
                 return
             if user and user.is_authenticated:
                 contato_data['created_by'] = user
+                contato_data['updated_by'] = user
             Contact.objects.create(lead=lead, **contato_data)
             return
 
@@ -126,10 +129,13 @@ class LeadSerializer(serializers.ModelSerializer):
                     setattr(existing, field, val)
                     updated = True
             if updated:
+                if user and user.is_authenticated:
+                    existing.updated_by = user
                 existing.save()
         else:
             if user and user.is_authenticated:
                 contato_data['created_by'] = user
+                contato_data['updated_by'] = user
             Contact.objects.create(lead=lead, **contato_data)
 
     def create(self, validated_data):
@@ -166,6 +172,9 @@ class LeadSerializer(serializers.ModelSerializer):
             return lead
 
         # 3. Empresa não existe — cria novo Lead
+        if user and user.is_authenticated:
+            validated_data['created_by'] = user
+            validated_data['updated_by'] = user
         lead = Lead.objects.create(**validated_data)
 
         # Define ManyToMany

@@ -11,11 +11,21 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, name='leads_api.tasks.import_leads_csv_task')
-def import_leads_csv_task(self, file_content, filename, duplicate=False, file_type='csv'):
+def import_leads_csv_task(self, file_content, filename, duplicate=False, file_type='csv', user_id=None):
     """
     Task assíncrona para processar importação de leads (suporta CSV e XLSX)
     """
     task_id = self.request.id
+
+    # Restaura o usuário no contexto da thread para que AuditModel.save() preencha updated_by
+    if user_id:
+        try:
+            from django.contrib.auth.models import User
+            from app.core.middleware import set_current_user
+            user = User.objects.get(pk=user_id)
+            set_current_user(user)
+        except Exception:
+            pass
 
     try:
         self.update_state(

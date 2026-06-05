@@ -164,6 +164,7 @@ class CustomTokenObtainAPIView(APIView):
 
         # Determinar se é HTTPS (para secure flag)
         is_secure = not settings.DEBUG
+        samesite = 'None' if is_secure else 'Lax'
 
         # Criar resposta com dados básicos do usuário
         response = Response({
@@ -177,10 +178,10 @@ class CustomTokenObtainAPIView(APIView):
         response.set_cookie(
             key='access_token',
             value=str(refresh.access_token),
-            httponly=True,          # Impede acesso via JavaScript
-            secure=is_secure,       # Só envia via HTTPS (False em desenvolvimento)
-            samesite='None',        # Protege contra CSRF Lax
-            max_age=60 * 60 * 24,   # 24 horas
+            httponly=True,
+            secure=is_secure,
+            samesite=samesite,
+            max_age=60 * 60 * 24,
             path='/',
         )
 
@@ -190,8 +191,8 @@ class CustomTokenObtainAPIView(APIView):
             value=str(refresh),
             httponly=True,
             secure=is_secure,
-            samesite='None',
-            max_age=60 * 60 * 24 * 7,  # 7 dias
+            samesite=samesite,
+            max_age=60 * 60 * 24 * 7,
             path='/',
         )
 
@@ -231,6 +232,7 @@ class CustomTokenRefreshAPIView(APIView):
             new_access_token = str(refresh.access_token)
 
             is_secure = not settings.DEBUG
+            samesite = 'None' if is_secure else 'Lax'
 
             response = Response(
                 {'message': 'Token atualizado com sucesso'},
@@ -243,7 +245,7 @@ class CustomTokenRefreshAPIView(APIView):
                 value=new_access_token,
                 httponly=True,
                 secure=is_secure,
-                samesite='None', #Lax
+                samesite=samesite,
                 max_age=60 * 60 * 24,
                 path='/',
             )
@@ -341,8 +343,9 @@ class LogoutView(APIView):
         )
 
         # Limpar cookies
-        response.delete_cookie('access_token', path='/', samesite='None')
-        response.delete_cookie('refresh_token', path='/', samesite='None')
+        samesite = 'None' if not settings.DEBUG else 'Lax'
+        response.delete_cookie('access_token', path='/', samesite=samesite)
+        response.delete_cookie('refresh_token', path='/', samesite=samesite)
 
         return response
 
