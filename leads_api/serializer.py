@@ -74,12 +74,16 @@ class LeadSerializer(serializers.ModelSerializer):
         - Campos numéricos (CNPJ, telefone, celular, CNES): apenas dígitos.
         - Campos de texto: minúsculo, sem espaços nas pontas.
         """
-        numeric_fields = ['cnpj', 'cnes', 'telefone', 'celular', 'telefone_contato']
+        # CNPJ e CNES: só remove máscara, sem split (a / faz parte do CNPJ)
+        mask_only_fields = ['cnpj', 'cnes']
+        # Telefones: pega apenas o primeiro número quando vierem múltiplos separados por / | ,
+        phone_fields = ['telefone', 'celular', 'telefone_contato']
 
         for key, value in list(data.items()):
             if isinstance(value, str):
-                if key in numeric_fields:
-                    # Pega apenas o primeiro número caso venham múltiplos separados por / | , espaços
+                if key in mask_only_fields:
+                    data[key] = re.sub(r'[^0-9]', '', value.strip())
+                elif key in phone_fields:
                     first = re.split(r'\s*[/|,]\s*|\s{2,}', value.strip())[0]
                     data[key] = re.sub(r'[^0-9]', '', first)
                 else:

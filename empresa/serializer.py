@@ -156,6 +156,9 @@ class EmpresaCreateSerializer(EmpresaBaseSerializer):
 class EmpresaUpdateSerializer(EmpresaBaseSerializer):
     """Serializer específico para atualização"""
 
+    nfe_hora_inicio = serializers.IntegerField(required=False, min_value=0, max_value=23)
+    nfe_hora_fim = serializers.IntegerField(required=False, min_value=0, max_value=23)
+
     class Meta(EmpresaBaseSerializer.Meta):
         extra_kwargs = {
             **EmpresaBaseSerializer.Meta.extra_kwargs,

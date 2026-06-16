@@ -2,6 +2,7 @@ import logging
 import os
 from re import sub
 from lxml import etree
+from datetime import datetime
 
 from celery import shared_task
 from django.conf import settings
@@ -49,6 +50,8 @@ def automatizar_nfe_task(self):
         "detalhes": []
     }
 
+    hora_atual = datetime.now().hour
+
     for empresa in empresas_com_certificado:
         empresa_result = {
             "empresa": empresa.razao_social,
@@ -57,6 +60,23 @@ def automatizar_nfe_task(self):
             "documentos": 0,
             "erros": []
         }
+
+        hora_inicio = empresa.nfe_hora_inicio
+        hora_fim = empresa.nfe_hora_fim
+
+        # Verifica se hora atual está dentro da janela configurada pela empresa
+        if hora_inicio <= hora_fim:
+            dentro_janela = hora_inicio <= hora_atual <= hora_fim
+        else:
+            # Janela passa da meia-noite (ex: 22h até 06h)
+            dentro_janela = hora_atual >= hora_inicio or hora_atual <= hora_fim
+
+        if not dentro_janela:
+            logger.info(f"[TASK] {empresa.razao_social} fora da janela configurada ({hora_inicio}h-{hora_fim}h). Pulando.")
+            empresa_result["status"] = "fora_janela"
+            empresa_result["mensagem"] = f"Fora da janela {hora_inicio}h-{hora_fim}h"
+            results["detalhes"].append(empresa_result)
+            continue
 
         logger.info(f"[TASK] Processando empresa: {empresa.razao_social}")
 

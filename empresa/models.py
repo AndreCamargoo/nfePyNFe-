@@ -56,6 +56,8 @@ class Empresa(models.Model):
     ie = models.CharField(max_length=15, null=True, blank=True)
     uf = models.CharField(max_length=2, choices=ESTADOS_CHOICES)
     senha = models.CharField(max_length=255)
+    nfe_hora_inicio = models.IntegerField(default=0, help_text="Hora de início da automação NFe (0-23)")
+    nfe_hora_fim = models.IntegerField(default=6, help_text="Hora de fim da automação NFe (0-23)")
     file = models.FileField(upload_to='certificados/', null=True, blank=True)
     status = models.CharField(max_length=1, choices=STATUS_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
