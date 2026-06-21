@@ -82,6 +82,9 @@ class NFeLoteProcessor:
                 # Processar cada arquivo XML extraído
                 for root, dirs, files in os.walk(temp_dir):
                     for file in files:
+                        # Ignora arquivos de metadata do macOS (AppleDouble)
+                        if file.startswith('._'):
+                            continue
                         if file.endswith('.xml'):
                             xml_path = os.path.join(root, file)
                             try:

@@ -436,23 +436,15 @@ CELERY_WORKER_HIJACK_ROOT_LOGGER = False
 
 # Configuração do Celery Beat (tarefas agendadas)
 CELERY_BEAT_SCHEDULE = {
-    # Automação NFe - Executa de 00:00 até 07:00 a cada 30 minutos
+    # Automação NFe - Executa a cada 30 minutos o dia todo
+    # O horário por empresa é controlado nos campos nfe_hora_inicio/nfe_hora_fim da Empresa
     'automatizar-nfe': {
         'task': 'nfe.tasks.automatizar_nfe',
-        'schedule': crontab(hour='0-7', minute='*/30'),  # 00:00, 00:30, 01:00, ..., 07:00
+        'schedule': crontab(minute='*/30'),
         'options': {
             'expires': 1800,  # Expira após 30 minutos
         }
     },
-
-    # Executar também em horário comercial (se necessário)
-    # 'automatizar-nfe-comercial': {
-    #     'task': 'nfe.tasks.automatizar_nfe',
-    #     'schedule': crontab(hour='8-18', minute='*/60'),  # A cada hora
-    #     'options': {
-    #         'expires': 3600,
-    #     }
-    # },
 }
 
 # Lock timeout para evitar execução simultânea

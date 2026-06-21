@@ -51,16 +51,16 @@ class Emitente(models.Model):
     IE = models.CharField(max_length=20, null=True, blank=True)
     CRT = models.IntegerField()
     # Endereço simplificado
-    xLgr = models.CharField(max_length=100, null=True, blank=True)
-    nro = models.CharField(max_length=10, null=True, blank=True)
-    xBairro = models.CharField(max_length=50, null=True, blank=True)
+    xLgr = models.CharField(max_length=200, null=True, blank=True)
+    nro = models.CharField(max_length=60, null=True, blank=True)
+    xBairro = models.CharField(max_length=120, null=True, blank=True)
     cMun = models.CharField(max_length=7, null=True, blank=True)
-    xMun = models.CharField(max_length=50, null=True, blank=True)
+    xMun = models.CharField(max_length=120, null=True, blank=True)
     UF = models.CharField(max_length=2, null=True, blank=True)
     CEP = models.CharField(max_length=8, null=True, blank=True)
     cPais = models.CharField(max_length=4, null=True, blank=True)
-    xPais = models.CharField(max_length=50, null=True, blank=True)
-    fone = models.CharField(max_length=15, blank=True, null=True)
+    xPais = models.CharField(max_length=60, null=True, blank=True)
+    fone = models.CharField(max_length=20, blank=True, null=True)
 
     def __str__(self):
         return f"{self.xNome} - {self.xFant}"
@@ -73,16 +73,16 @@ class Destinatario(models.Model):
     IE = models.CharField(max_length=20, blank=True, null=True)
     indIEDest = models.IntegerField(null=True, blank=True)
     # Endereço simplificado
-    xLgr = models.CharField(max_length=100, null=True, blank=True)
-    nro = models.CharField(max_length=10, null=True, blank=True)
-    xCpl = models.CharField(max_length=50, blank=True, null=True)
-    xBairro = models.CharField(max_length=50, null=True, blank=True)
+    xLgr = models.CharField(max_length=200, null=True, blank=True)
+    nro = models.CharField(max_length=60, null=True, blank=True)
+    xCpl = models.CharField(max_length=120, blank=True, null=True)
+    xBairro = models.CharField(max_length=120, null=True, blank=True)
     cMun = models.CharField(max_length=7, null=True, blank=True)
-    xMun = models.CharField(max_length=50, null=True, blank=True)
+    xMun = models.CharField(max_length=120, null=True, blank=True)
     UF = models.CharField(max_length=2, null=True, blank=True)
     CEP = models.CharField(max_length=8, null=True, blank=True)
     cPais = models.CharField(max_length=4, null=True, blank=True)
-    xPais = models.CharField(max_length=50, null=True, blank=True)
+    xPais = models.CharField(max_length=60, null=True, blank=True)
 
     def __str__(self):
         return f"{self.xNome} - {self.xMun}"
