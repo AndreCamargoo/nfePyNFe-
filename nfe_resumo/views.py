@@ -2,7 +2,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from app.permissions import GlobalDefaultPermission
+from app.permissions import GlobalDefaultPermission, PodeAcessarRotasFuncionario
 
 from empresa.models import Empresa
 from nfe_resumo.models import ResumoNFe
@@ -15,7 +15,7 @@ from app.utils.nfe import Nfe
 
 
 class ResumoNFeProcessAPIView(generics.ListCreateAPIView):
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
     serializer_class = ResumoNFeSerializer
 
     def get_queryset(self):
@@ -62,7 +62,7 @@ class ResumoNFeRetriveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView
 
 
 class ResumoNFeManifestacaoAPIView(generics.GenericAPIView):
-    permission_classes = (IsAuthenticated, GlobalDefaultPermission)
+    permission_classes = (IsAuthenticated, PodeAcessarRotasFuncionario)
 
     def post(self, request, *args, **kwargs):
         try:
